@@ -11,70 +11,102 @@
 <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
 
 <style>
-  :root{
-    --bg:#f6fbf6;
-    --card:#ffffff;
-    --accent:#4caf50;
-    --danger:#e53935;
-    --muted:#8899a6;
-    --text:#153238;
-  }
-  body{
-    margin:0;
-    font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
-    background:var(--bg);
-    color:var(--text);
-  }
-  header{
-    background:linear-gradient(90deg,#fff,#eef9ef);
-    padding:16px 18px;
-    box-shadow:0 6px 18px rgba(10,30,20,0.06);
-    display:flex;
-    gap:12px;
-    align-items:center;
-  }
-  .logo{
-    width:44px;height:44px;border-radius:8px;
-    display:flex;align-items:center;justify-content:center;background:#eaf6ea;
-    margin-left:6px;
-  }
-  h1{font-size:18px;margin:0;}
-  .subtitle{font-size:12px;color:var(--muted);margin-top:4px;}
+:root{
+  --bg:#f6fbf6;
+  --card:#ffffff;
+  --accent:#4caf50;
+  --danger:#e53935;
+  --muted:#8899a6;
+  --text:#153238;
+}
+body{
+  margin:0;
+  font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+  background:var(--bg);
+  color:var(--text);
+}
+header{
+  background:linear-gradient(90deg,#fff,#eef9ef);
+  padding:16px 18px;
+  box-shadow:0 6px 18px rgba(10,30,20,0.06);
+  display:flex;
+  gap:12px;
+  align-items:center;
+}
+.logo{
+  width:44px;height:44px;border-radius:8px;
+  display:flex;align-items:center;justify-content:center;background:#eaf6ea;
+  margin-left:6px;
+}
+h1{font-size:18px;margin:0;}
+.subtitle{font-size:12px;color:var(--muted);margin-top:4px;}
 
-  .grid{
-    max-width:1200px;margin:18px auto;padding:14px;display:grid;gap:18px;
-    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  }
-  .card{
-    background:var(--card);padding:14px;border-radius:12px;
-    box-shadow:0 8px 24px rgba(10,30,20,0.04);
-  }
-  .card h3{margin:6px 0 10px;font-size:15px;}
-  .gauge-area{display:flex;flex-direction:column;align-items:center;gap:8px;}
-  .status{font-weight:700;font-size:14px;margin-top:6px;}
-  .badge{display:inline-block;padding:6px 10px;border-radius:8px;color:white;font-weight:700}
-  .muted {background:var(--muted);}
-  .ok {background:var(--accent);}
-  .bad {background:var(--danger);}
+/* Grid layout for 4 sensors */
+.grid{
+  max-width:1200px;
+  margin:18px auto;
+  padding:14px;
+  display:grid;
+  gap:18px;
+  grid-template-columns: repeat(4, 1fr); /* 4 columns on desktop */
+}
+@media (max-width: 1024px) { .grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 600px)  { .grid { grid-template-columns: 1fr; } }
 
-  canvas { max-width:260px; height:150px; display:block; margin: 0 auto; }
+/* Cards */
+.card{
+  display:flex;
+  flex-direction: column;
+  justify-content: space-between;
+  background: var(--card);
+  padding: 14px;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(10,30,20,0.04);
+  min-height: 450px; /* uniform height */
+}
+.card h3{margin:6px 0 10px;font-size:15px;}
+.gauge-area{
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  min-height: 180px; /* same for all sensors */
+}
+.status{
+  font-weight:700;
+  font-size:14px;
+  margin-top:6px;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+}
+.badge{display:inline-block;padding:6px 10px;border-radius:8px;color:white;font-weight:700}
+.muted {background:var(--muted);}
+.ok {background:var(--accent);}
+.bad {background:var(--danger);}
 
-  .chart-small { height:150px !important; }
+/* Canvas sizes */
+canvas { width: 260px !important; height: 150px !important; display: block; margin:0 auto; }
+.chart-small { width: 260px !important; height: 150px !important; }
 
-  .pumps {
-    display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin-top:8px;
-  }
-  .pump-box { min-width:160px;padding:10px;border-radius:10px;background:#fbfff9;text-align:center;box-shadow:0 8px 18px rgba(10,30,20,0.03); }
-  .export-btn { display:block;margin:16px auto;padding:10px 14px;border-radius:10px;background:var(--accent);color:#fff;border:none;font-weight:700;cursor:pointer; }
-  .export-btn:active{transform:translateY(1px);}
-  @media (max-width:420px){ canvas{max-width:200px} }
+.pumps {
+  display:flex;
+  gap:12px;
+  flex-wrap:wrap;
+  justify-content:center;
+  margin-top:8px;
+}
+.pump-box { min-width:160px;padding:10px;border-radius:10px;background:#fbfff9;text-align:center;box-shadow:0 8px 18px rgba(10,30,20,0.03); }
+.export-btn { display:block;margin:16px auto;padding:10px 14px;border-radius:10px;background:var(--accent);color:#fff;border:none;font-weight:700;cursor:pointer; }
+.export-btn:active{transform:translateY(1px);}
+@media (max-width:420px){ canvas{max-width:200px; height:120px !important;} }
 </style>
 </head>
 <body>
 
 <header>
   <div class="logo" aria-hidden="true">
-    <!-- simple farm SVG -->
     <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
       <path d="M12 2C9.8 2 8 3.8 8 6c0 1.5.8 2.8 2 3.5V11l-2 4h8l-2-4V9.5c1.2-.7 2-2 2-3.5 0-2.2-1.8-4-4-4z" fill="#4CAF50"/>
       <path d="M3 20c0-4 4-8 9-8s9 4 9 8H3z" fill="#2E7D32"/>
@@ -91,7 +123,7 @@
   <section class="card" id="tempCard">
     <h3>🌡️ Temperature (°C)</h3>
     <div class="gauge-area">
-      <canvas id="tempGauge" width="260" height="150"></canvas>
+      <canvas id="tempGauge"></canvas>
       <div id="tempStatus" class="status"><span class="badge muted">--</span></div>
     </div>
     <h4 style="margin-top:12px;">Live Chart</h4>
@@ -102,7 +134,7 @@
   <section class="card" id="soilCard">
     <h3>🌱 Soil Moisture (%)</h3>
     <div class="gauge-area">
-      <canvas id="soilGauge" width="260" height="150"></canvas>
+      <canvas id="soilGauge"></canvas>
       <div id="soilStatus" class="status"><span class="badge muted">--</span></div>
     </div>
     <h4 style="margin-top:12px;">Live Chart</h4>
@@ -112,8 +144,8 @@
   <!-- Water Card -->
   <section class="card" id="waterCard">
     <h3>💧 Water Level (cm)</h3>
-    <div style="display:flex;flex-direction:column;align-items:center;gap:8px;">
-      <canvas id="waterGauge" width="260" height="150"></canvas>
+    <div class="gauge-area">
+      <canvas id="waterGauge"></canvas>
       <div id="waterStatus" class="status"><span class="badge muted">--</span></div>
     </div>
     <h4 style="margin-top:12px;">Live Chart (cm)</h4>
@@ -123,8 +155,8 @@
   <!-- Fertilizer Card -->
   <section class="card" id="fertCard">
     <h3>🧪 Fertilizer Level (cm)</h3>
-    <div style="display:flex;flex-direction:column;align-items:center;gap:8px;">
-      <canvas id="fertGauge" width="260" height="150"></canvas>
+    <div class="gauge-area">
+      <canvas id="fertGauge"></canvas>
       <div id="fertStatus" class="status"><span class="badge muted">Schedule for Fertilizing Monday 6 AM ⏰</span></div>
     </div>
     <h4 style="margin-top:12px;">Live Chart (cm)</h4>
@@ -148,277 +180,136 @@
 </section>
 
 <script>
-/* =====================================================
-   CONFIG
-   ===================================================== */
+/* ===================== CONFIG ===================== */
 const FLESPI_TOKEN = 'QGE7NyfGF3wfQDIaFbtlRbIAtNISsgmCRziAPBk6qcEbCKmE6Z4DnraLRnEKds8f';
 const MQTT_TOPIC = 'ttgo/all_sensors';
-
-// Set expected max cm for gauges/charts (adjust if needed)
-const WATER_MAX_CM = 80;   // e.g., tank height
+const WATER_MAX_CM = 80;
 const FERT_MAX_CM  = 50;
 
-/* =====================================================
-   Helper functions
-   ===================================================== */
+/* ===================== HELPERS ===================== */
 function setBadge(elId, text, kind='muted'){
   const el = document.getElementById(elId);
   if(!el) return;
   el.textContent = text;
-  el.className = 'badge ' + (kind === 'ok' ? 'ok' : (kind === 'bad' ? 'bad' : 'muted'));
+  el.className = 'badge ' + (kind==='ok'?'ok':kind==='bad'?'bad':'muted');
 }
-
-/* Flexible pump inference */
 function inferPump1(relay1){
-  if (relay1 === undefined || relay1 === null) return 'UNKNOWN';
-  const s = String(relay1).toLowerCase();
-  if (s==='1' || s==='on' || s==='true' || s.includes('on') || s.includes('dry')) return 'ON';
-  if (s==='0' || s==='off' || s==='false' || s.includes('off') || s.includes('wet')) return 'OFF';
+  if (relay1===undefined||relay1===null) return 'UNKNOWN';
+  const s=String(relay1).toLowerCase();
+  if (s==='1'||s==='on'||s==='true'||s.includes('on')||s.includes('dry')) return 'ON';
+  if (s==='0'||s==='off'||s==='false'||s.includes('off')||s.includes('wet')) return 'OFF';
   return relay1;
 }
 function inferPump2(relay2){
-  if (relay2 === undefined || relay2 === null) return 'Waiting for Schedule';
-  const s = String(relay2).toLowerCase();
-  if (s==='1' || s==='on' || s.includes('fertil') || s.includes('on')) return 'Fertilizing';
+  if (relay2===undefined||relay2===null) return 'Waiting for Schedule';
+  const s=String(relay2).toLowerCase();
+  if (s==='1'||s==='on'||s.includes('fertil')||s.includes('on')) return 'Fertilizing';
   return 'Waiting for Schedule';
 }
+function clamp(v,min,max){ return Math.max(min,Math.min(max,v)); }
 
-/* clamp */
-function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
+/* ===================== CHARTS & GAUGES ===================== */
+function createGauge(ctx){ return new Chart(ctx,{type:'doughnut',data:{datasets:[{data:[0,1],backgroundColor:['#4CAF50','#eef7ef'],borderWidth:0}]},options:{animation:false,cutout:'70%',rotation:-90,circumference:180,plugins:{legend:{display:false},tooltip:{enabled:false}}}});}
+function updateGauge(chart,value,max){ const pct=max?clamp(value/max*100,0,100):clamp(value,0,100); chart.data.datasets[0].data=[pct,100-pct]; chart.update(); }
+function createLine(ctx,label,yMax){ return new Chart(ctx,{type:'line',data:{labels:[],datasets:[{label:label,data:[],borderColor:'#1976d2',tension:0.1,pointRadius:0}]},options:{animation:false,responsive:true,scales:{x:{display:true},y:{display:true,beginAtZero:true,suggestedMax:yMax}},plugins:{legend:{display:false}}}});}
 
-/* =====================================================
-   Charts & Gauges (Chart.js) - animations disabled
-   ===================================================== */
-/* Doughnut gauge helper (non-animated): shows value vs max */
-function createGauge(ctx, valueLabel){
-  return new Chart(ctx, {
-    type: 'doughnut',
-    data: { datasets: [{ data: [0,1], backgroundColor: ['#4CAF50','#eef7ef'], borderWidth:0 }] },
-    options: {
-      animation: false,
-      cutout: '70%',
-      rotation: -90,
-      circumference: 180,
-      plugins: {
-        legend: { display: false },
-        tooltip: { enabled: false },
-      }
-    }
-  });
+/* Gauges */
+const tempGauge = createGauge(document.getElementById('tempGauge').getContext('2d'));
+const soilGauge = createGauge(document.getElementById('soilGauge').getContext('2d'));
+const waterGauge = createGauge(document.getElementById('waterGauge').getContext('2d'));
+const fertGauge  = createGauge(document.getElementById('fertGauge').getContext('2d'));
+
+/* Line charts */
+const tempLine = createLine(document.getElementById('tempChart').getContext('2d'),'Temperature (°C)',60);
+const soilLine = createLine(document.getElementById('soilChart').getContext('2d'),'Soil (%)',100);
+const waterLine = createLine(document.getElementById('waterChart').getContext('2d'),'Water (cm)',WATER_MAX_CM);
+const fertLine  = createLine(document.getElementById('fertChart').getContext('2d'),'Fertilizer (cm)',FERT_MAX_CM);
+
+const MAX_POINTS=120;
+const history={time:[],temp:[],soil:[],water:[],fert:[]};
+let exportRows=[];
+
+/* Draw center text on gauge */
+function drawCenterText(canvasElem,text){
+  try{
+    const ctx=canvasElem.getContext('2d');
+    const w=canvasElem.width,h=canvasElem.height;
+    ctx.clearRect((w/2)-40,(h/2)-24,80,48);
+    ctx.fillStyle='#153238';
+    ctx.font='bold 14px Arial';
+    ctx.textAlign='center';
+    ctx.textBaseline='middle';
+    ctx.fillText(text,w/2,h/2-5);
+  }catch(e){}
 }
 
-function updateGauge(chart, value, max){
-  const pct = max ? clamp(value / max * 100, 0, 100) : clamp(value,0,100);
-  chart.data.datasets[0].data = [pct, 100 - pct];
-  chart.update();
-}
+/* ===================== MQTT ===================== */
+const client = mqtt.connect('wss://mqtt.flespi.io:443',{username:'FlespiToken '+FLESPI_TOKEN});
+client.on('connect',()=>{ console.log('Connected to Flespi MQTT'); client.subscribe(MQTT_TOPIC,(err)=>{ if(err) console.error('Subscribe error',err); }); });
+client.on('error',(e)=>console.error('MQTT error',e));
+client.on('message',(topic,message)=>{
+  try{
+    const data=JSON.parse(message.toString());
+    const temp=Number(data.temp??data.temperature??0);
+    const soil=Number(data.soil_avg??data.soil??0);
+    const waterCm=Number(data.water_level??data.water??0);
+    const fertCm=Number(data.fert_level??data.fert??0);
+    const relay1=data.relay1??data.relay??null;
+    const relay2=data.relay2??data.relay_2??null;
+    const timestamp=data.timestamp??new Date().toISOString();
 
-/* Line chart helper */
-function createLine(ctx, label, yMax){
-  return new Chart(ctx, {
-    type: 'line',
-    data: { labels: [], datasets: [{ label: label, data: [], borderColor: '#1976d2', tension: 0.1, pointRadius: 0 }] },
-    options: {
-      animation: false,
-      responsive: true,
-      scales: {
-        x: { display: true },
-        y: { display: true, beginAtZero: true, suggestedMax: yMax }
-      },
-      plugins: { legend: { display: false } }
-    }
-  });
-}
+    updateGauge(tempGauge,temp,60); updateGauge(soilGauge,soil,100); updateGauge(waterGauge,waterCm,WATER_MAX_CM); updateGauge(fertGauge,fertCm,FERT_MAX_CM);
+    drawCenterText(document.getElementById('tempGauge'),`${temp.toFixed(1)}°C`);
+    drawCenterText(document.getElementById('soilGauge'),`${soil.toFixed(1)}%`);
+    drawCenterText(document.getElementById('waterGauge'),`${waterCm.toFixed(1)} cm`);
+    drawCenterText(document.getElementById('fertGauge'),`${fertCm.toFixed(1)} cm`);
 
-/* Create gauges */
-const tempGauge = createGauge(document.getElementById('tempGauge').getContext('2d'),'°C');
-const soilGauge = createGauge(document.getElementById('soilGauge').getContext('2d'),'%');
-const waterGauge = createGauge(document.getElementById('waterGauge').getContext('2d'),'cm');
-const fertGauge  = createGauge(document.getElementById('fertGauge').getContext('2d'),'cm');
-
-/* Create individual line charts */
-const tempLine = createLine(document.getElementById('tempChart').getContext('2d'),'Temperature (°C)', 60);
-const soilLine = createLine(document.getElementById('soilChart').getContext('2d'),'Soil (%)', 100);
-const waterLine = createLine(document.getElementById('waterChart').getContext('2d'),'Water (cm)', WATER_MAX_CM);
-const fertLine  = createLine(document.getElementById('fertChart').getContext('2d'),'Fertilizer (cm)', FERT_MAX_CM);
-
-/* Keep small history to avoid memory growth */
-const MAX_POINTS = 120;
-const history = { time:[], temp:[], soil:[], water:[], fert:[] };
-
-/* Push a data point into history and update corresponding chart */
-function pushAndUpdate(lineChart, arrName, value, label){
-  history[arrName].push(value);
-  if (history[arrName].length > MAX_POINTS) history[arrName].shift();
-  // labels synced on time
-  lineChart.data.labels = history.time.slice();
-  lineChart.data.datasets[0].data = history[arrName].slice();
-  lineChart.update();
-}
-
-/* =====================================================
-   MQTT (Flespi) connection
-   ===================================================== */
-const client = mqtt.connect('wss://mqtt.flespi.io:443', {
-  username: 'FlespiToken ' + FLESPI_TOKEN
-});
-
-client.on('connect', () => {
-  console.log('Connected to Flespi MQTT');
-  client.subscribe(MQTT_TOPIC, (err) => {
-    if (err) console.error('Subscribe error', err);
-  });
-});
-client.on('error', (e) => console.error('MQTT error', e));
-
-/* For export */
-let exportRows = []; // store raw readings for Excel
-
-client.on('message', (topic, message) => {
-  try {
-    const raw = message.toString();
-    const data = JSON.parse(raw);
-
-    /* Accept several variations of field names to be robust */
-    const temp = Number(data.temp ?? data.temperature ?? data.temp_c ?? 0);
-    const soil = Number(data.soil_avg ?? data.soil ?? data.soil_moisture ?? 0);
-    const waterCm = Number(data.water_level ?? data.waterLevel ?? data.water ?? 0);
-    const fertCm  = Number(data.fert_level ?? data.fertLevel ?? data.fert ?? 0);
-    const relay1 = data.relay1 ?? data.relay ?? data.pump1 ?? data.relay_1 ?? null;
-    const relay2 = data.relay2 ?? data.relay_2 ?? data.pump2 ?? null;
-    const timestamp = data.timestamp ?? new Date().toISOString();
-
-    // Update gauges (we map numeric values to gauge percentage of max)
-    updateGauge(tempGauge, temp, 60);          // temp mapped to 60°C max
-    updateGauge(soilGauge, soil, 100);         // soil % mapped to 100%
-    updateGauge(waterGauge, waterCm, WATER_MAX_CM);
-    updateGauge(fertGauge, fertCm, FERT_MAX_CM);
-
-    // Update center text overlays by drawing text on canvas (simple)
-    drawCenterText(document.getElementById('tempGauge'), `${temp.toFixed(1)}°C`);
-    drawCenterText(document.getElementById('soilGauge'), `${soil.toFixed(1)}%`);
-    drawCenterText(document.getElementById('waterGauge'), `${waterCm.toFixed(1)} cm`);
-    drawCenterText(document.getElementById('fertGauge'), `${fertCm.toFixed(1)} cm`);
-
-    // Status logic
-    // Temp: <=30 Warm; >30 Hot (user requested <=30 Warm, >31 Hot — treat 31+ as Hot)
-    const tempStatus = (temp <= 30) ? ['Warm','muted'] : ['Hot','bad'];
-    setBadge('tempStatus', (tempStatus[0] === 'Warm' ? '🌤️ Warm' : '🔥 Hot'), tempStatus[1] === 'bad' ? 'bad' : 'ok');
-
-    // Soil: <=40 Dry, >41 Wet (handle 40-> Dry; 41-> Wet; 40.5 borderline => Wet)
-    const soilStatus = (soil <= 40) ? ['Dry','bad'] : ['Wet','ok'];
-    setBadge('soilStatus', (soilStatus[0] === 'Dry' ? '🌵 Dry' : '💧 Wet'), soilStatus[1] === 'ok' ? 'ok' : 'bad');
-
-    // Water: <=30 Not Sufficient, >31 Sufficient (display cm)
-    const waterStatus = (waterCm <= 30) ? ['Water is Not Sufficient','bad'] : ['Water is Sufficient','ok'];
-    setBadge('waterStatus', (waterStatus[0] === 'Water is Not Sufficient' ? '🚱 Water is Not Sufficient' : '💦 Water is Sufficient'), waterStatus[1] === 'ok' ? 'ok' : 'bad');
-
-    // Fertilizer: always show schedule text (user requested)
+    setBadge('tempStatus', temp<=30?'🌤️ Warm':'🔥 Hot', temp<=30?'ok':'bad');
+    setBadge('soilStatus', soil<=40?'🌵 Dry':'💧 Wet', soil<=40?'bad':'ok');
+    setBadge('waterStatus', waterCm<=30?'🚱 Water is Not Sufficient':'💦 Water is Sufficient', waterCm<=30?'bad':'ok');
     setBadge('fertStatus','Schedule for Fertilizing Monday 6 AM ⏰','muted');
 
-    // Pumps: Pump1 ON/OFF, Pump2 Fertilizing / Waiting for Schedule
-    const p1 = inferPump1(relay1);
-    setBadge('pump1Badge', p1 === 'ON' ? '🟢 ON' : (p1 === 'OFF' ? '🔴 OFF' : String(p1)), p1 === 'ON' ? 'ok' : (p1 === 'OFF' ? 'bad' : 'muted'));
+    setBadge('pump1Badge',inferPump1(relay1)==='ON'?'🟢 ON':'🔴 OFF',inferPump1(relay1)==='ON'?'ok':'bad');
+    const p2State=inferPump2(relay2);
+    setBadge('pump2Badge',p2State==='Fertilizing'?'🧪 Fertilizing':'⏳ Waiting for Schedule',p2State==='Fertilizing'?'ok':'muted');
 
-    const p2State = inferPump2(relay2);
-    setBadge('pump2Badge', p2State === 'Fertilizing' ? '🧪 Fertilizing' : '⏳ Waiting for Schedule', p2State === 'Fertilizing' ? 'ok' : 'muted');
+    const label=new Date(timestamp).toLocaleTimeString();
+    history.time.push(label); if(history.time.length>MAX_POINTS) history.time.shift();
+    history.temp.push(temp); if(history.temp.length>MAX_POINTS) history.temp.shift();
+    history.soil.push(soil); if(history.soil.length>MAX_POINTS) history.soil.shift();
+    history.water.push(waterCm); if(history.water.length>MAX_POINTS) history.water.shift();
+    history.fert.push(fertCm); if(history.fert.length>MAX_POINTS) history.fert.shift();
 
-    // Update per-sensor charts (labels synced by timestamp)
-    const label = new Date(timestamp).toLocaleTimeString();
-    history.time.push(label);
-    if (history.time.length > MAX_POINTS) history.time.shift();
+    tempLine.data.labels=history.time.slice(); tempLine.data.datasets[0].data=history.temp.slice(); tempLine.update();
+    soilLine.data.labels=history.time.slice(); soilLine.data.datasets[0].data=history.soil.slice(); soilLine.update();
+    waterLine.data.labels=history.time.slice(); waterLine.data.datasets[0].data=history.water.slice(); waterLine.update();
+    fertLine.data.labels=history.time.slice(); fertLine.data.datasets[0].data=history.fert.slice(); fertLine.update();
 
-    // push each series and limit length
-    history.temp.push(temp); if (history.temp.length > MAX_POINTS) history.temp.shift();
-    history.soil.push(soil); if (history.soil.length > MAX_POINTS) history.soil.shift();
-    history.water.push(waterCm); if (history.water.length > MAX_POINTS) history.water.shift();
-    history.fert.push(fertCm);   if (history.fert.length > MAX_POINTS) history.fert.shift();
+    exportRows.push({timestamp,temp,soil_avg:soil,water_cm:waterCm,fert_cm:fertCm,relay1,relay2});
+    if(exportRows.length>5000) exportRows.shift();
 
-    // update charts datasets
-    tempLine.data.labels = history.time.slice();
-    tempLine.data.datasets[0].data = history.temp.slice();
-    tempLine.update();
-
-    soilLine.data.labels = history.time.slice();
-    soilLine.data.datasets[0].data = history.soil.slice();
-    soilLine.update();
-
-    waterLine.data.labels = history.time.slice();
-    waterLine.data.datasets[0].data = history.water.slice();
-    waterLine.update();
-
-    fertLine.data.labels = history.time.slice();
-    fertLine.data.datasets[0].data = history.fert.slice();
-    fertLine.update();
-
-    // store for excel export
-    exportRows.push({
-      timestamp: timestamp,
-      temp: temp,
-      soil_avg: soil,
-      water_cm: waterCm,
-      fert_cm: fertCm,
-      relay1: relay1,
-      relay2: relay2
-    });
-    if (exportRows.length > 5000) exportRows.shift();
-
-  } catch (err) {
-    console.error('Failed to parse MQTT message', err);
-  }
+  }catch(err){ console.error('Failed to parse MQTT message',err); }
 });
 
-/* draw center text on doughnut canvas */
-function drawCenterText(canvasElem, text){
-  try{
-    const ctx = canvasElem.getContext('2d');
-    // clear center area by redrawing overlay (Chart.js leaves chart as-is; we'll draw text over it)
-    // to avoid growing drawings, re-render by drawing white circle then text
-    const w = canvasElem.width, h = canvasElem.height;
-    // compute center coordinates (doughnut rotated -90 degrees)
-    ctx.save();
-    ctx.fillStyle = 'rgba(0,0,0,0)'; // don't clear whole canvas to preserve chart
-    // draw text
-    ctx.restore();
-    // We'll draw text using Chart.js plugin approach would be ideal, but simple overlay works:
-    // Remove prior manual text by clearing a rectangle in center area (approximate)
-    ctx.clearRect((w/2)-40, (h/2)-24, 80, 48);
-    ctx.fillStyle = '#153238';
-    ctx.font = 'bold 14px Arial';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(text, w/2, h/2 - 5);
-  } catch(e){ /* ignore drawing errors */ }
-}
-
-/* =====================================================
-   Export to Excel (.xlsx)
-   ===================================================== */
-const exportRows = [];
-document.getElementById('exportBtn').addEventListener('click', ()=> {
-  if (exportRows.length === 0){
-    alert('No data to export yet');
-    return;
-  }
-  const aoa = [
-    ["timestamp","temp (°C)","soil_avg (%)","water_cm","fert_cm","relay1","relay2"]
-  ].concat(exportRows.map(r=>[r.timestamp,r.temp,r.soil_avg,r.water_cm,r.fert_cm,r.relay1,r.relay2]));
-  const ws = XLSX.utils.aoa_to_sheet(aoa);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Sensor Data');
-  const dt = new Date();
-  const fname = `SmartFarmData_${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}_${String(dt.getHours()).padStart(2,'0')}${String(dt.getMinutes()).padStart(2,'0')}.xlsx`;
-  XLSX.writeFile(wb, fname);
+/* ===================== Export Excel ===================== */
+document.getElementById('exportBtn').addEventListener('click',()=>{
+  if(exportRows.length===0){ alert('No data to export yet'); return; }
+  const aoa=[["timestamp","temp (°C)","soil_avg (%)","water_cm","fert_cm","relay1","relay2"]].concat(exportRows.map(r=>[r.timestamp,r.temp,r.soil_avg,r.water_cm,r.fert_cm,r.relay1,r.relay2]));
+  const ws=XLSX.utils.aoa_to_sheet(aoa);
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'Sensor Data');
+  const dt=new Date();
+  const fname=`SmartFarmData_${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}_${String(dt.getHours()).padStart(2,'0')}${String(dt.getMinutes()).padStart(2,'0')}.xlsx`;
+  XLSX.writeFile(wb,fname);
 });
 
-/* initialize badges */
+/* Initialize badges */
 setBadge('tempStatus','--','muted');
 setBadge('soilStatus','--','muted');
 setBadge('waterStatus','--','muted');
 setBadge('fertStatus','Schedule for Fertilizing Monday 6 AM ⏰','muted');
 setBadge('pump1Badge','—','muted');
 setBadge('pump2Badge','—','muted');
-
 </script>
 </body>
 </html>
