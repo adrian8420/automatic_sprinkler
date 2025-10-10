@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IoT Dashboard with Export</title>
+<style>
+body { font-family: Arial; background:#f0f2f5; margin:0; padding:20px; }
+h1 { text-align:center; }
+.container { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:20px; }
+.card { background:white; padding:15px; border-radius:10px; box-shadow:0 4px 6px rgba(0,0,0,0.1); text-align:center; }
+canvas { width:100%; height:150px; margin-top:10px; }
+.status span { padding:5px 10px; border-radius:6px; color:white; font-weight:bold; display:inline-block; margin-top:8px; }
+button { margin-top:20px; padding:10px 15px; font-size:16px; border:none; border-radius:8px; background:#4CAF50; color:white; cursor:pointer; }
+button:hover { background:#45a049; }
+</style>
+</head>
+<body>
+
+<h1>Live IoT Dashboard</h1>
+<div class="container">
+  <div class="card">
+    <h3>Soil Moisture</h3>
+    <canvas id="soilGauge"></canvas>
+    <div class="status" id="soilStatus">-</div>
+    <canvas id="soilChart"></canvas>
+  </div>
+  <div class="card">
+    <h3>Temperature</h3>
+    <canvas id="tempGauge"></canvas>
+    <div class="status" id="tempStatus">-</div>
+    <canvas id="tempChart"></canvas>
+  </div>
+  <div class="card">
+    <h3>Water Level</h3>
+    <canvas id="waterGauge"></canvas>
+    <div class="status" id="waterStatus">-</div>
+    <canvas id="waterChart"></canvas>
+  </div>
+  <div class="card">
+    <h3>Fertilizer Level</h3>
+    <canvas id="fertGauge"></canvas>
+    <div class="status" id="fertStatus">-</div>
+    <canvas id="fertChart"></canvas>
+  </div>
+</div>
+
+<button onclick="exportToExcel()">Export to Excel</button>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+<script>
+// MQTT Setup
+const broker = 'wss://test.mosquitto.org:8081'; // Replace with your broker
+const client = mqtt.connect(broker);
+
+const topics = ['ttgo/soil','ttgo/temp','ttgo/water','ttgo/fert'];
+
+// Data history
+const history = { soil:[], temp:[], water:[], fert:[] };
+const maxHistory = 50;
+const labels = [];
+
+// Create Gauges
+function createGauge(ctx, max) {
+  return new Chart(ctx, {
+    type: 'doughnut',
+    data: { datasets:[{ data:[0,max], backgroundColor:['#4CAF50','#eee'], borderWidth:0 }] },
+    options: { circumference:180, rotation:270, cutout:'70%', plugins:{ tooltip:{ enabled:false } } }
+  });
+}
+
+const soilGauge = createGauge(document.getElementById('soilGauge').getContext('2d'),100);
+const tempGauge = createGauge(document.getElementById('tempGauge').getContext('2d'),50);
+const waterGauge = createGauge(document.getElementById('waterGauge').getContext('2d'),100);
+const fertGauge = createGauge(document.getElementById('fertGauge').getContext('2d'),100);
+
+function updateGauge(gauge, value, max){
+  gauge.data.datasets[0].data[0] = value;
+  gauge.data.datasets[0].data[1] = max - value;
+  gauge.update();
+}
+
+// Line charts
+function createLineChart(ctx, label, max) {
+  return new Chart(ctx, {
+    type:'line',
+    data: { labels:[], datasets:[{ label, data:[], borderColor:'#4CAF50', backgroundColor:'rgba(76,175,80,0.2)', tension:0.3 }] },
+    options: { animation:false, scales:{ y:{ min:0, max } }, plugins:{ legend:{ display:false } } }
+  });
+}
+
+const soilChart = createLineChart(document.getElementById('soilChart').getContext('2d'),'Soil Moisture',100);
+const tempChart = createLineChart(document.getElementById('tempChart').getContext('2d'),'Temperature',50);
+const waterChart = createLineChart(document.getElementById('waterChart').getContext('2d'),'Water Level',100);
+const fertChart = createLineChart(document.getElementById('fertChart').getContext('2d'),'Fertilizer',100);
+
+// Status
+function updateStatus(elementId, value, type) {
+  const el = document.getElementById(elementId);
+  let text='-', color='#888';
+  if(type==='soil'){ text=value<=40?'Dry':'Wet'; color=value<=40?'#f44336':'#4CAF50'; }
+  else if(type==='temp'){ text=value<=30?'Warm':'Hot'; color=value<=30?'#FFC107':'#f44336'; }
+  else if(type==='water'){ text=value<=30?'Not Sufficient':'Sufficient'; color=value<=30?'#f44336':'#4CAF50'; }
+  else if(type==='fert'){ text=value<=30?'Low':'OK'; color=value<=30?'#f44336':'#4CAF50'; }
+  el.innerHTML = `<span style="background:${color}">${text}</span>`;
+}
+
+// MQTT
+client.on('connect', () => {
+  console.log('Connected to MQTT broker');
+  topics.forEach(topic => client.subscribe(topic));
+});
+
+client.on('message', (topic, message) => {
+  const value = Number(message.toString());
+  const time = new Date().toLocaleTimeString();
+  labels.push(time);
+  if(labels.length>maxHistory) labels.shift();
+
+  switch(topic){
+    case 'ttgo/soil':
+      history.soil.push(value); if(history.soil.length>maxHistory) history.soil.shift();
+      updateGauge(soilGauge,value,100);
+      updateStatus('soilStatus', value,'soil');
+      soilChart.data.labels = [...labels]; soilChart.data.datasets[0].data = [...history.soil]; soilChart.update();
+      break;
+    case 'ttgo/temp':
+      history.temp.push(value); if(history.temp.length>maxHistory) history.temp.shift();
+      updateGauge(tempGauge,value,50);
+      updateStatus('tempStatus', value,'temp');
+      tempChart.data.labels = [...labels]; tempChart.data.datasets[0].data = [...history.temp]; tempChart.update();
+      break;
+    case 'ttgo/water':
+      history.water.push(value); if(history.water.length>maxHistory) history.water.shift();
+      updateGauge(waterGauge,value,100);
+      updateStatus('waterStatus', value,'water');
+      waterChart.data.labels = [...labels]; waterChart.data.datasets[0].data = [...history.water]; waterChart.update();
+      break;
+    case 'ttgo/fert':
+      history.fert.push(value); if(history.fert.length>maxHistory) history.fert.shift();
+      updateGauge(fertGauge,value,100);
+      updateStatus('fertStatus', value,'fert');
+      fertChart.data.labels = [...labels]; fertChart.data.datasets[0].data = [...history.fert]; fertChart.update();
+      break;
+  }
+});
+
+// Export to Excel
+function exportToExcel() {
+  const ws_data = [
+    ['Time','Soil Moisture','Temperature','Water Level','Fertilizer Level']
+  ];
+  for(let i=0; i<labels.length; i++){
+    ws_data.push([
+      labels[i],
+      history.soil[i]||'',
+      history.temp[i]||'',
+      history.water[i]||'',
+      history.fert[i]||''
+    ]);
+  }
+  const ws = XLSX.utils.aoa_to_sheet(ws_data);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Sensor Data');
+  XLSX.writeFile(wb, 'sensor_data.xlsx');
+}
+</script>
+</body>
+</html>
