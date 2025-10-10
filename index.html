@@ -17,7 +17,7 @@ button:hover { background:#45a049; }
 </head>
 <body>
 
-<h1>Live IoT Dashboard (Flespi MQTT)</h1>
+<h1>🌱 Live IoT Dashboard (Flespi MQTT)</h1>
 <div class="container">
   <div class="card">
     <h3>Soil Moisture</h3>
@@ -43,6 +43,14 @@ button:hover { background:#45a049; }
     <div class="status" id="fertStatus">-</div>
     <canvas id="fertChart"></canvas>
   </div>
+  <div class="card">
+    <h3>Relay 1 Status</h3>
+    <div class="status" id="relay1Status">-</div>
+  </div>
+  <div class="card">
+    <h3>Relay 2 Status</h3>
+    <div class="status" id="relay2Status">-</div>
+  </div>
 </div>
 
 <button onclick="exportToExcel()">Export to Excel</button>
@@ -59,7 +67,7 @@ const client = mqtt.connect('wss://mqtt.flespi.io:443', {
   username: 'FlespiToken QGE7NyfGF3wfQDIaFbtlRbIAtNISsgmCRziAPBk6qcEbCKmE6Z4DnraLRnEKds8f',
 });
 
-const topics = ['ttgo/soil', 'ttgo/temp', 'ttgo/water', 'ttgo/fert'];
+const topics = ['ttgo/soil', 'ttgo/temp', 'ttgo/water', 'ttgo/fert', 'ttgo/relay1', 'ttgo/relay2'];
 
 // ===============================
 // 📊 Data storage
@@ -107,7 +115,7 @@ const waterChart = createLineChart(document.getElementById('waterChart').getCont
 const fertChart = createLineChart(document.getElementById('fertChart').getContext('2d'),'Fertilizer',100);
 
 // ===============================
-// 🔵 Status Badges
+// 🟢 Status & Relay Badges
 // ===============================
 function updateStatus(elementId, value, type) {
   const el = document.getElementById(elementId);
@@ -116,6 +124,7 @@ function updateStatus(elementId, value, type) {
   else if(type==='temp'){ text=value<=30?'Warm':'Hot'; color=value<=30?'#FFC107':'#f44336'; }
   else if(type==='water'){ text=value<=30?'Not Sufficient':'Sufficient'; color=value<=30?'#f44336':'#4CAF50'; }
   else if(type==='fert'){ text=value<=30?'Low':'OK'; color=value<=30?'#f44336':'#4CAF50'; }
+  else if(type==='relay'){ text=value===1?'ON':'OFF'; color=value===1?'#4CAF50':'#f44336'; }
   el.innerHTML = `<span style="background:${color}">${text}</span>`;
 }
 
@@ -169,6 +178,12 @@ client.on('message', (topic, message) => {
       fertChart.data.labels = [...labels];
       fertChart.data.datasets[0].data = [...history.fert];
       fertChart.update();
+      break;
+    case 'ttgo/relay1':
+      updateStatus('relay1Status', value,'relay');
+      break;
+    case 'ttgo/relay2':
+      updateStatus('relay2Status', value,'relay');
       break;
   }
 });
