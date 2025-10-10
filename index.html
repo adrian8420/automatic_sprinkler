@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>IoT Dashboard with Export</title>
+<title>IoT Dashboard (Flespi MQTT)</title>
 <style>
 body { font-family: Arial; background:#f0f2f5; margin:0; padding:20px; }
 h1 { text-align:center; }
@@ -17,7 +17,7 @@ button:hover { background:#45a049; }
 </head>
 <body>
 
-<h1>Live IoT Dashboard</h1>
+<h1>Live IoT Dashboard (Flespi MQTT)</h1>
 <div class="container">
   <div class="card">
     <h3>Soil Moisture</h3>
@@ -52,18 +52,25 @@ button:hover { background:#45a049; }
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
 <script>
-// MQTT Setup
-const broker = 'wss://test.mosquitto.org:8081'; // Replace with your broker
-const client = mqtt.connect(broker);
+// ===============================
+// 🔗 MQTT Flespi Connection Setup
+// ===============================
+const client = mqtt.connect('wss://mqtt.flespi.io:443', {
+  username: 'FlespiToken QGE7NyfGF3wfQDIaFbtlRbIAtNISsgmCRziAPBk6qcEbCKmE6Z4DnraLRnEKds8f',
+});
 
-const topics = ['ttgo/soil','ttgo/temp','ttgo/water','ttgo/fert'];
+const topics = ['ttgo/soil', 'ttgo/temp', 'ttgo/water', 'ttgo/fert'];
 
-// Data history
+// ===============================
+// 📊 Data storage
+// ===============================
 const history = { soil:[], temp:[], water:[], fert:[] };
 const maxHistory = 50;
 const labels = [];
 
-// Create Gauges
+// ===============================
+// 📈 Gauges
+// ===============================
 function createGauge(ctx, max) {
   return new Chart(ctx, {
     type: 'doughnut',
@@ -83,7 +90,9 @@ function updateGauge(gauge, value, max){
   gauge.update();
 }
 
-// Line charts
+// ===============================
+// 📉 Line Charts
+// ===============================
 function createLineChart(ctx, label, max) {
   return new Chart(ctx, {
     type:'line',
@@ -97,7 +106,9 @@ const tempChart = createLineChart(document.getElementById('tempChart').getContex
 const waterChart = createLineChart(document.getElementById('waterChart').getContext('2d'),'Water Level',100);
 const fertChart = createLineChart(document.getElementById('fertChart').getContext('2d'),'Fertilizer',100);
 
-// Status
+// ===============================
+// 🔵 Status Badges
+// ===============================
 function updateStatus(elementId, value, type) {
   const el = document.getElementById(elementId);
   let text='-', color='#888';
@@ -108,51 +119,65 @@ function updateStatus(elementId, value, type) {
   el.innerHTML = `<span style="background:${color}">${text}</span>`;
 }
 
-// MQTT
+// ===============================
+// ⚙️ MQTT Events
+// ===============================
 client.on('connect', () => {
-  console.log('Connected to MQTT broker');
+  console.log('✅ Connected to Flespi MQTT broker');
   topics.forEach(topic => client.subscribe(topic));
+});
+
+client.on('error', (err) => {
+  console.error('❌ MQTT Error:', err);
 });
 
 client.on('message', (topic, message) => {
   const value = Number(message.toString());
   const time = new Date().toLocaleTimeString();
   labels.push(time);
-  if(labels.length>maxHistory) labels.shift();
+  if(labels.length > maxHistory) labels.shift();
 
   switch(topic){
     case 'ttgo/soil':
       history.soil.push(value); if(history.soil.length>maxHistory) history.soil.shift();
       updateGauge(soilGauge,value,100);
       updateStatus('soilStatus', value,'soil');
-      soilChart.data.labels = [...labels]; soilChart.data.datasets[0].data = [...history.soil]; soilChart.update();
+      soilChart.data.labels = [...labels];
+      soilChart.data.datasets[0].data = [...history.soil];
+      soilChart.update();
       break;
     case 'ttgo/temp':
       history.temp.push(value); if(history.temp.length>maxHistory) history.temp.shift();
       updateGauge(tempGauge,value,50);
       updateStatus('tempStatus', value,'temp');
-      tempChart.data.labels = [...labels]; tempChart.data.datasets[0].data = [...history.temp]; tempChart.update();
+      tempChart.data.labels = [...labels];
+      tempChart.data.datasets[0].data = [...history.temp];
+      tempChart.update();
       break;
     case 'ttgo/water':
       history.water.push(value); if(history.water.length>maxHistory) history.water.shift();
       updateGauge(waterGauge,value,100);
       updateStatus('waterStatus', value,'water');
-      waterChart.data.labels = [...labels]; waterChart.data.datasets[0].data = [...history.water]; waterChart.update();
+      waterChart.data.labels = [...labels];
+      waterChart.data.datasets[0].data = [...history.water];
+      waterChart.update();
       break;
     case 'ttgo/fert':
       history.fert.push(value); if(history.fert.length>maxHistory) history.fert.shift();
       updateGauge(fertGauge,value,100);
       updateStatus('fertStatus', value,'fert');
-      fertChart.data.labels = [...labels]; fertChart.data.datasets[0].data = [...history.fert]; fertChart.update();
+      fertChart.data.labels = [...labels];
+      fertChart.data.datasets[0].data = [...history.fert];
+      fertChart.update();
       break;
   }
 });
 
-// Export to Excel
+// ===============================
+// 📁 Export to Excel
+// ===============================
 function exportToExcel() {
-  const ws_data = [
-    ['Time','Soil Moisture','Temperature','Water Level','Fertilizer Level']
-  ];
+  const ws_data = [['Time','Soil Moisture','Temperature','Water Level','Fertilizer Level']];
   for(let i=0; i<labels.length; i++){
     ws_data.push([
       labels[i],
