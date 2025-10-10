@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>IoT Dashboard (Flespi MQTT)</title>
+<title>Automatic Sprinkler and Fertilization Dashboard</title>
 <style>
 body { font-family: Arial; background:#f0f2f5; margin:0; padding:20px; }
 h1 { text-align:center; }
@@ -17,7 +17,7 @@ button:hover { background:#45a049; }
 </head>
 <body>
 
-<h1>Automatic Sprinkler and Fertelization Dashboard</h1>
+<h1>Automatic Sprinkler and Fertilization Dashboard</h1>
 <div class="container">
   <div class="card">
     <h3>Soil Moisture</h3>
@@ -67,7 +67,7 @@ const client = mqtt.connect('wss://mqtt.flespi.io:443', {
   username: 'FlespiToken QGE7NyfGF3wfQDIaFbtlRbIAtNISsgmCRziAPBk6qcEbCKmE6Z4DnraLRnEKds8f',
 });
 
-const topics = ['ttgo/soil', 'ttgo/temp', 'ttgo/water', 'ttgo/fert', 'ttgo/relay1', 'ttgo/relay2'];
+const topics = ['ttgo/soilAvg', 'ttgo/temperature', 'ttgo/tank1', 'ttgo/tank2', 'ttgo/relay1', 'ttgo/relay2'];
 
 // ===============================
 // 📊 Data storage
@@ -210,4 +210,5 @@ function exportToExcel() {
 </script>
 </body>
 </html>
+
 
