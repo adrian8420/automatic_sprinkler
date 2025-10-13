@@ -144,7 +144,7 @@
   <!-- Row 1: Gauges (4) -->
   <main class="grid" id="gaugesGrid">
     <section class="card">
-      <h3>🌱 Soil Moisture</h3>
+      <h3>🌱 Soil Moisture (avg)</h3>
       <div class="gauge-wrap">
         <canvas id="gaugeSoil" class="gauge-canvas"></canvas>
         <div class="gauge-value" id="soilValue">-- %</div>
@@ -180,7 +180,7 @@
     </section>
   </main>
 
-  <!-- Row 2: Line charts (4) -->
+  <!-- Row 2: Line charts (kept unchanged) -->
   <main class="grid" style="grid-template-columns: repeat(4, 1fr); max-width:var(--maxwidth); margin:0 auto; padding:0 14px 18px;">
     <div class="chart-card">
       <h3 style="color:#2e7d32; margin-bottom:6px;">Soil Moisture (%)</h3>
@@ -227,39 +227,118 @@ const FLESPI_TOKEN = 'QGE7NyfGF3wfQDIaFbtlRbIAtNISsgmCRziAPBk6qcEbCKmE6Z4DnraLRn
 const MQTT_TOPIC = 'ttgo/all_sensors';
 
 /* ===============================
-   Helpers: center text plugin for half donut
+   Needle gauge plugin & factory
+   - keeps doughnut for semi-circle fill
+   - draws ticks and a needle similar to Node-RED gauge look
    =============================== */
+
+const needleAndTicksPlugin = {
+  id: 'needleAndTicksPlugin',
+  beforeDraw(chart) {
+    // only run for doughnut gauges created by createNeedleGauge (we set chart.options.gauge = true)
+    if (!chart?.options?.gauge) return;
+    const ctx = chart.ctx;
+    const cw = chart.width;
+    const ch = chart.height;
+    const centerX = chart.getDatasetMeta(0).data[0].x;
+    const centerY = chart.getDatasetMeta(0).data[0].y;
+    const radius = chart.getDatasetMeta(0).data[0].outerRadius;
+    // draw ticks and needle
+    const maxVal = chart.options.gauge.maxValue || 100;
+    const value = Number(chart.options.plugins.centerText?.value ?? 0);
+
+    // compute angle range (rotation + circumference)
+    const startAngle = chart.options.rotation;          // in radians, e.g. Math.PI
+    const sweep = chart.options.circumference;          // e.g. Math.PI
+
+    // ticks
+    ctx.save();
+    ctx.translate(centerX, centerY);
+    ctx.lineWidth = 1.2;
+    ctx.strokeStyle = '#888';
+    const tickCount = chart.options.gauge.ticks || 5;
+    for (let i=0;i<=tickCount;i++){
+      const frac = i / tickCount;
+      const angle = startAngle + frac * sweep;
+      const innerR = radius * 0.78;
+      const outerR = radius * 0.9;
+      const x1 = Math.cos(angle) * innerR;
+      const y1 = Math.sin(angle) * innerR;
+      const x2 = Math.cos(angle) * outerR;
+      const y2 = Math.sin(angle) * outerR;
+      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+      // small label numbers under ticks
+      const labelVal = Math.round(frac * maxVal);
+      ctx.fillStyle = '#444';
+      ctx.font = '10px Inter, Arial';
+      // label position a bit further out
+      const lx = Math.cos(angle) * (outerR + 12);
+      const ly = Math.sin(angle) * (outerR + 12);
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(String(labelVal), lx, ly);
+    }
+
+    // needle
+    // map value to angle
+    let v = Math.max(0, Math.min(maxVal, value));
+    const frac = v / maxVal;
+    const needleAngle = startAngle + frac * sweep;
+    const needleLen = radius * 0.72;
+    ctx.lineWidth = 3.0;
+    ctx.strokeStyle = '#111';
+    ctx.fillStyle = '#111';
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(Math.cos(needleAngle) * needleLen, Math.sin(needleAngle) * needleLen);
+    ctx.stroke();
+
+    // needle base circle
+    ctx.beginPath();
+    ctx.fillStyle = '#111';
+    ctx.arc(0,0,6,0,Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+  }
+};
+
 const centerTextPlugin = {
   id: 'centerTextPlugin',
-  afterDraw(chart, args, pluginOptions) {
+  afterDraw(chart) {
     if (chart.config.type !== 'doughnut') return;
     const value = chart.config.options.plugins.centerText?.value ?? '';
     const ctx = chart.ctx;
     const cw = chart.width;
     const ch = chart.height;
     ctx.save();
-    ctx.fillStyle = pluginOptions.color || '#000';
-    ctx.font = pluginOptions.font || 'bold 20px Inter, Arial';
+    ctx.fillStyle = '#111';
+    ctx.font = 'bold 20px Inter, Arial';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(value, cw / 2, ch * 0.62); // placed roughly in the center of the semicircle
+    // Put numeric under the semicircle center
+    ctx.fillText(value, cw / 2, ch * 0.615);
+    // optional unit (if provided)
+    const unit = chart.config.options.plugins.centerText?.unit ?? '';
+    if (unit) {
+      ctx.font = '12px Inter, Arial';
+      ctx.fillText(unit, cw/2, ch * 0.68);
+    }
     ctx.restore();
   }
 };
 
-/* ===============================
-   Create semi-circle gauge function
-   =============================== */
-function createSemiGauge(canvasId, color, maxVal=100) {
+Chart.register(needleAndTicksPlugin, centerTextPlugin);
+
+/* Create a half-donut gauge with needle */
+function createNeedleGauge(canvasId, color, maxVal=100, options = {}) {
   const ctx = document.getElementById(canvasId).getContext('2d');
-  const cfg = new Chart(ctx, {
+  const chart = new Chart(ctx, {
     type: 'doughnut',
     data: {
       labels: ['value','remaining'],
       datasets: [{
         data: [0, maxVal],
         backgroundColor: [color, '#eee'],
-        hoverBackgroundColor: [color, '#eee'],
         borderWidth: 0
       }]
     },
@@ -267,40 +346,44 @@ function createSemiGauge(canvasId, color, maxVal=100) {
       animation: false,
       responsive: true,
       cutout: '72%',
-      rotation: Math.PI,       // start bottom-left
-      circumference: Math.PI, // half circle
+      rotation: Math.PI,
+      circumference: Math.PI,
       plugins: {
         legend: { display:false },
         tooltip: { enabled:false },
-        centerText: { value: '--' } // custom plugin reads this
+        centerText: { value: '--', unit: options.unit || '' }
+      },
+      gauge: {
+        maxValue: maxVal,
+        ticks: options.ticks || 5
       }
-    },
-    plugins: [centerTextPlugin]
+    }
   });
-  return cfg;
+  return chart;
 }
 
-/* ===============================
-   Setup gauges (semi-circle)
-   =============================== */
-const gaugeSoil = createSemiGauge('gaugeSoil', '#4a3acb', 100);
-const gaugeTemp = createSemiGauge('gaugeTemp', '#8d6e63', 60);
-const gaugeWater = createSemiGauge('gaugeWater', '#1976d2', 100);
-const gaugeFert  = createSemiGauge('gaugeFert',  '#fb8c00', 100);
-
-/* update gauge helper */
-function updateGauge(gauge, rawValue, maxVal, labelText) {
+/* update gauge helper (only changes dataset values & center text) */
+function updateGauge(chart, rawValue, maxVal, unitText = '') {
   let value = Number(rawValue);
   if (!isFinite(value)) value = 0;
-  const display = (labelText === '°C') ? `${value.toFixed(1)}` : `${value.toFixed(1)}`;
-  gauge.data.datasets[0].data[0] = Math.max(0, Math.min(maxVal, value));
-  gauge.data.datasets[0].data[1] = Math.max(0, maxVal - gauge.data.datasets[0].data[0]);
-  gauge.options.plugins.centerText.value = display;
-  gauge.update();
+  const clipped = Math.max(0, Math.min(maxVal, value));
+  chart.data.datasets[0].data[0] = clipped;
+  chart.data.datasets[0].data[1] = Math.max(0, maxVal - clipped);
+  chart.options.plugins.centerText.value = (unitText === '°C') ? value.toFixed(1) : value.toFixed(1);
+  chart.options.plugins.centerText.unit = unitText;
+  chart.update();
 }
 
 /* ===============================
-   Line charts (no animation)
+   Setup gauges (needle style)
+   =============================== */
+const gaugeSoil = createNeedleGauge('gaugeSoil', '#4a3acb', 100, { unit:'%', ticks:5 });
+const gaugeTemp = createNeedleGauge('gaugeTemp', '#8d6e63', 60, { unit:'°C', ticks:6 });
+const gaugeWater = createNeedleGauge('gaugeWater', '#1976d2', 100, { unit:'cm', ticks:5 });
+const gaugeFert  = createNeedleGauge('gaugeFert',  '#fb8c00', 100, { unit:'cm', ticks:5 });
+
+/* ===============================
+   Line charts (unchanged)
    =============================== */
 function makeLine(canvasId, label, color, suggestedMax) {
   const ctx = document.getElementById(canvasId).getContext('2d');
@@ -331,7 +414,7 @@ const history = { labels:[], soil:[], temp:[], water:[], fert:[] };
 /* data storage for excel */
 const storedRows = [];
 
-/* small helpers */
+/* helper to push and update charts */
 function pushHistory(ts, soil, temp, water, fert) {
   const label = new Date(ts).toLocaleTimeString();
   history.labels.push(label); if(history.labels.length>MAX_POINTS) history.labels.shift();
@@ -374,7 +457,6 @@ function inferPump1(v){
   const s = String(v).toLowerCase();
   if (s === 'on' || s === '1' || s.includes('on')) return {label:'🟢 ON', kind:'ok'};
   if (s === 'off' || s === '0' || s.includes('off')) return {label:'🔴 OFF', kind:'bad'};
-  // sometimes your ESP published "ON"/"OFF"
   return {label:String(v), kind:'muted'};
 }
 function inferPump2(v){
@@ -414,6 +496,7 @@ client.on('message', (topic, message) => {
 
     // pick keys that match your ESP payload
     const temp = Number(d.temp ?? d.temperature ?? 0);
+    // soil average required by you:
     const soil = Number(d.soil_avg ?? d.soil ?? 0);
     const waterCm = Number(d.water_level ?? d.waterLevel ?? d.water ?? 0);
     const fertCm  = Number(d.fert_level ?? d.fertLevel ?? d.fert ?? 0);
@@ -421,7 +504,7 @@ client.on('message', (topic, message) => {
     const relay2 = d.relay2 ?? d.relay_2 ?? d.pump2 ?? null;
     const ts = d.timestamp ?? new Date().toISOString();
 
-    // update gauges (max for temp gauge set to 60)
+    // update needle gauges (soil uses average)
     updateGauge(gaugeSoil, soil, 100, '%');
     updateGauge(gaugeTemp, temp, 60, '°C');
     updateGauge(gaugeWater, waterCm, 100, 'cm');
@@ -451,7 +534,7 @@ client.on('message', (topic, message) => {
     const p2 = inferPump2(relay2);
     setBadge('pump2Badge', p2.label, p2.kind === 'ok' ? 'ok' : 'muted');
 
-    // push history and update small charts
+    // push history and update small charts (unchanged)
     pushHistory(ts, soil, temp, waterCm, fertCm);
 
     // store row for excel
@@ -490,6 +573,5 @@ setBadge('pump1Badge','—','muted');
 setBadge('pump2Badge','—','muted');
 
 </script>
-
 </body>
 </html>
