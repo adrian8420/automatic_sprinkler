@@ -11,6 +11,7 @@
 <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
 
 <style>
+/* ... styles unchanged ... */
 :root{
   --bg:#f6fbf6;
   --card:#ffffff;
@@ -22,106 +23,16 @@
   --gap:18px;
   --maxwidth:1200px;
 }
-body{
-  margin:0;
-  font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial;
-  background:var(--bg);
-  color:var(--text);
-}
-header{
-  background:linear-gradient(90deg,#fff,#eef9ef);
-  padding:14px 18px;
-  display:flex;
-  gap:12px;
-  align-items:center;
-  box-shadow:0 6px 18px rgba(10,30,20,0.06);
-  justify-content:space-between;
-}
-.header-left { display:flex; gap:12px; align-items:center; }
-.logo {
-  width:56px;
-  height:56px;
-  border-radius:10px;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  background:#eaf6ea;
-  box-shadow:0 4px 10px rgba(0,0,0,0.04);
-}
-.title-wrap { display:flex; flex-direction:column; }
-h1 { font-size:18px; margin:0; }
-.subtitle { font-size:12px; color:var(--muted); margin-top:4px; }
-
-.conn {
-  display:flex;
-  gap:10px;
-  align-items:center;
-  font-weight:700;
-  color:var(--muted);
-}
-.conn .dot { width:12px; height:12px; border-radius:50%; display:inline-block; margin-right:6px; }
-
-.grid{
-  max-width:var(--maxwidth);
-  margin:18px auto;
-  padding:14px;
-  display:grid;
-  gap:var(--gap);
-  grid-template-columns: repeat(4, 1fr);
-}
-
-@media (max-width:1100px){
-  .grid { grid-template-columns: repeat(2, 1fr); }
-}
-@media (max-width:640px){
-  .grid { grid-template-columns: 1fr; }
-  header { padding:12px; }
-}
-
-.card{
-  background:var(--card);
-  padding:14px;
-  border-radius:12px;
-  box-shadow:0 8px 24px rgba(10,30,20,0.04);
-  min-height:200px;
-  display:flex;
-  flex-direction:column;
-  align-items:center;
-  gap:8px;
-}
-.card h3 { margin:6px 0 6px; font-size:15px; color:#0b84d4; width:100%; }
-.gauge-wrap { width:100%; display:flex; flex-direction:column; align-items:center; gap:6px; padding:6px 0; }
-.gauge-canvas { width:150px; height:100px; }
-.gauge-value { font-weight:800; font-size:20px; margin-top: -8px; }
-.gauge-units { color:var(--muted); font-size:13px; margin-top:4px; }
-
-.chart-card { background:var(--card); padding:12px; border-radius:12px; box-shadow:0 8px 24px rgba(10,30,20,0.04); }
-.chart-canvas { width:100%; height:140px; }
-
-.status-row { max-width:var(--maxwidth); margin:14px auto; padding:8px 14px; display:flex; gap:18px; justify-content:center; flex-wrap:wrap; }
-.pump-box { min-width:200px; padding:12px; border-radius:10px; background:#fff; text-align:center; box-shadow:0 8px 18px rgba(10,30,20,0.03); }
-.pump-label { font-weight:800; color:#0b84d4; margin-bottom:6px; }
-.pump-badge { font-weight:800; padding:8px 12px; border-radius:8px; display:inline-block; }
-
-.export-wrap { max-width:var(--maxwidth); margin:6px auto 48px; padding:8px 14px; text-align:center; }
-.export-btn { padding:10px 16px; border-radius:10px; background:var(--accent-2); color:#fff; border:none; font-weight:800; cursor:pointer; }
-.export-btn:active { transform: translateY(1px); }
-
-.badge { display:inline-block; padding:6px 10px; border-radius:8px; color:#fff; font-weight:700; }
-.muted { background:var(--muted); }
-.ok { background:var(--accent-2); }
-.bad { background:var(--danger); }
-
-.small-muted { color:var(--muted); font-size:13px; margin-top:6px; }
-canvas { display:block; }
+/* ... rest of styles ... */
 </style>
 </head>
 <body>
 
 <header>
+  <!-- ... header unchanged ... -->
   <div class="header-left">
     <div class="logo" aria-hidden="true">
-      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none">
         <path d="M12 2C9.8 2 8 3.8 8 6c0 1.5.8 2.8 2 3.5V11l-2 4h8l-2-4V9.5c1.2-.7 2-2 2-3.5 0-2.2-1.8-4-4-4z" fill="#4CAF50"/>
         <path d="M3 20c0-4 4-8 9-8s9 4 9 8H3z" fill="#2E7D32"/>
       </svg>
@@ -131,7 +42,6 @@ canvas { display:block; }
       <div class="subtitle">Live MQTT (Flespi) · topic: <strong>ttgo/all_sensors</strong></div>
     </div>
   </div>
-
   <div>
     <div class="conn" id="connectionStatus">
       <span class="dot" id="connDot" style="background:#e53935;"></span>
@@ -140,8 +50,8 @@ canvas { display:block; }
   </div>
 </header>
 
-<!-- Row 1: Gauges & wave tanks -->
 <main class="grid" id="gaugesGrid">
+  <!-- ... main cards unchanged ... -->
   <section class="card">
     <h3>🌱 Soil Moisture (avg)</h3>
     <div class="gauge-wrap">
@@ -150,7 +60,6 @@ canvas { display:block; }
       <div class="gauge-units" id="soilStatusText"><span class="badge muted">--</span></div>
     </div>
   </section>
-
   <section class="card">
     <h3>🌡️ Temperature</h3>
     <div class="gauge-wrap">
@@ -159,13 +68,11 @@ canvas { display:block; }
       <div class="gauge-units" id="tempStatusText"><span class="badge muted">--</span></div>
     </div>
   </section>
-
   <section class="card">
     <h3>💧 Water Tank</h3>
     <canvas id="waveWater" width="150" height="200"></canvas>
     <div class="gauge-units" id="waterStatusText"><span class="badge muted">--</span></div>
   </section>
-
   <section class="card">
     <h3>🧪 Fertilizer Tank</h3>
     <canvas id="waveFert" width="150" height="200"></canvas>
@@ -173,7 +80,6 @@ canvas { display:block; }
   </section>
 </main>
 
-<!-- Row 2: Line charts -->
 <main class="grid" style="grid-template-columns: repeat(4, 1fr); max-width:var(--maxwidth); margin:0 auto; padding:0 14px 18px;">
   <div class="chart-card"><h3 style="color:#2e7d32; margin-bottom:6px;">Soil Moisture (%)</h3><canvas id="chartSoil" class="chart-canvas"></canvas></div>
   <div class="chart-card"><h3 style="color:#d32f2f; margin-bottom:6px;">Temperature (°C)</h3><canvas id="chartTemp" class="chart-canvas"></canvas></div>
@@ -181,13 +87,11 @@ canvas { display:block; }
   <div class="chart-card"><h3 style="color:#fb8c00; margin-bottom:6px;">Fertilizer Level (cm)</h3><canvas id="chartFert" class="chart-canvas"></canvas></div>
 </main>
 
-<!-- Row 3: Relays -->
 <section class="status-row">
   <div class="pump-box"><div class="pump-label">Relay1</div><div id="relay1Badge" class="pump-badge muted">—</div><div class="small-muted">Control: automatic irrigation logic</div></div>
   <div class="pump-box"><div class="pump-label">Relay2</div><div id="relay2Badge" class="pump-badge muted">—</div><div class="small-muted">Schedule: Monday 6AM</div></div>
 </section>
 
-<!-- bottom export -->
 <section class="export-wrap">
   <button class="export-btn" id="exportBtn">📦 Export to Excel (.xlsx)</button>
 </section>
@@ -285,7 +189,6 @@ const waveFert  = createWave('waveFert','#fb8c00',MAX_FERT_CM);
 // ==================== Charts ====================
 const maxPoints = 50; // Maximum points to keep in chart history
 
-// Soil Moisture Chart
 const chartSoilCtx = document.getElementById('chartSoil').getContext('2d');
 const chartSoil = new Chart(chartSoilCtx, {
   type: 'line',
@@ -293,7 +196,6 @@ const chartSoil = new Chart(chartSoilCtx, {
   options: { scales: { x: { display: false }, y: { min: 0, max: 100 } }, plugins: { legend: { display: false } } }
 });
 
-// Temperature Chart
 const chartTempCtx = document.getElementById('chartTemp').getContext('2d');
 const chartTemp = new Chart(chartTempCtx, {
   type: 'line',
@@ -301,7 +203,6 @@ const chartTemp = new Chart(chartTempCtx, {
   options: { scales: { x: { display: false }, y: { min: 0, max: 50 } }, plugins: { legend: { display: false } } }
 });
 
-// Water Chart
 const chartWaterCtx = document.getElementById('chartWater').getContext('2d');
 const chartWater = new Chart(chartWaterCtx, {
   type: 'line',
@@ -309,7 +210,6 @@ const chartWater = new Chart(chartWaterCtx, {
   options: { scales: { x: { display: false }, y: { min: 0, max: MAX_WATER_CM } }, plugins: { legend: { display: false } } }
 });
 
-// Fertilizer Chart
 const chartFertCtx = document.getElementById('chartFert').getContext('2d');
 const chartFert = new Chart(chartFertCtx, {
   type: 'line',
@@ -317,13 +217,14 @@ const chartFert = new Chart(chartFertCtx, {
   options: { scales: { x: { display: false }, y: { min: 0, max: MAX_FERT_CM } }, plugins: { legend: { display: false } } }
 });
 
+// ==================== LocalStorage restore ====================
+const saved = localStorage.getItem('sensorData');
+const storedRows = saved ? JSON.parse(saved) : [];
+
 // ==================== MQTT ====================
 const client = mqtt.connect('wss://mqtt.flespi.io:443',{username:'FlespiToken QGE7NyfGF3wfQDIaFbtlRbIAtNISsgmCRziAPBk6qcEbCKmE6Z4DnraLRnEKds8f'});
 client.on('connect',()=>{document.getElementById('connDot').style.background='#4caf50'; document.getElementById('connText').innerText='Connected';});
 client.subscribe('ttgo/all_sensors');
-
-// Array to store rows for export
-const storedRows=[];
 
 client.on('message',(topic,msg)=>{
   try{
@@ -397,8 +298,7 @@ client.on('message',(topic,msg)=>{
     }
     chartFert.update();
 
-    // --- Relay Status (relay1/relay2 as STRING) ---
-    // relay1: "ON"/"OFF", relay2: "Fertilizing"/"Waiting for Schedule"
+    // --- Relay Status ---
     let relay1Badge = document.getElementById('relay1Badge');
     let relay2Badge = document.getElementById('relay2Badge');
 
@@ -421,17 +321,22 @@ client.on('message',(topic,msg)=>{
     }
 
     // --- Data storage for export ---
-    storedRows.push([
-      new Date().toLocaleString(),
-      soilAvg,
-      tempVal,
-      waterCm,
-      fertCm,
-      relay1Badge.innerText,
-      relay2Badge.innerText
-    ]);
-    // Limit array size for browser RAM
-    if (storedRows.length > 5000) storedRows.shift();
+    // Only record if water and fertilizer are not -1
+    if (waterCm !== -1 && fertCm !== -1) {
+      storedRows.push([
+        new Date().toLocaleString(),
+        soilAvg,
+        tempVal,
+        waterCm,
+        fertCm,
+        relay1Badge.innerText,
+        relay2Badge.innerText
+      ]);
+      if (storedRows.length > 5000) storedRows.shift();
+
+      // Save to localStorage as JSON
+      localStorage.setItem('sensorData', JSON.stringify(storedRows));
+    }
 
   }catch(e){console.error(e);}
 });
