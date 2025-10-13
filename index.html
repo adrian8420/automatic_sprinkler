@@ -163,13 +163,13 @@ canvas { display:block; }
   <section class="card">
     <h3>💧 Water Tank</h3>
     <canvas id="waveWater" width="150" height="200"></canvas>
-    <div class="gauge-units" id="waterStatusText"><span class="badge muted">-- cm</span></div>
+    <div class="gauge-units" id="waterStatusText"><span class="badge muted">--</span></div>
   </section>
 
   <section class="card">
     <h3>🧪 Fertilizer Tank</h3>
     <canvas id="waveFert" width="150" height="200"></canvas>
-    <div class="gauge-units" id="fertStatusText"><span class="badge muted">-- cm</span></div>
+    <div class="gauge-units" id="fertStatusText"><span class="badge muted">--</span></div>
   </section>
 </main>
 
@@ -181,10 +181,10 @@ canvas { display:block; }
   <div class="chart-card"><h3 style="color:#fb8c00; margin-bottom:6px;">Fertilizer Level (cm)</h3><canvas id="chartFert" class="chart-canvas"></canvas></div>
 </main>
 
-<!-- Row 3: Pumps -->
+<!-- Row 3: Relays -->
 <section class="status-row">
-  <div class="pump-box"><div class="pump-label">Pump1</div><div id="pump1Badge" class="pump-badge muted">—</div><div class="small-muted">Control: automatic irrigation logic</div></div>
-  <div class="pump-box"><div class="pump-label">Pump2</div><div id="pump2Badge" class="pump-badge muted">—</div><div class="small-muted">Schedule: Monday 6AM</div></div>
+  <div class="pump-box"><div class="pump-label">Relay1</div><div id="relay1Badge" class="pump-badge muted">—</div><div class="small-muted">Control: automatic irrigation logic</div></div>
+  <div class="pump-box"><div class="pump-label">Relay2</div><div id="relay2Badge" class="pump-badge muted">—</div><div class="small-muted">Schedule: Monday 6AM</div></div>
 </section>
 
 <!-- bottom export -->
@@ -282,36 +282,168 @@ function createWave(canvasId, color, maxCm) {
 const waveWater = createWave('waveWater','#1976d2',MAX_WATER_CM);
 const waveFert  = createWave('waveFert','#fb8c00',MAX_FERT_CM);
 
+// ==================== Charts ====================
+const maxPoints = 50; // Maximum points to keep in chart history
+
+// Soil Moisture Chart
+const chartSoilCtx = document.getElementById('chartSoil').getContext('2d');
+const chartSoil = new Chart(chartSoilCtx, {
+  type: 'line',
+  data: { labels: [], datasets: [{ label: 'Soil %', data: [], borderColor: '#2e7d32', backgroundColor: 'rgba(46,125,50,0.1)', fill: true }] },
+  options: { scales: { x: { display: false }, y: { min: 0, max: 100 } }, plugins: { legend: { display: false } } }
+});
+
+// Temperature Chart
+const chartTempCtx = document.getElementById('chartTemp').getContext('2d');
+const chartTemp = new Chart(chartTempCtx, {
+  type: 'line',
+  data: { labels: [], datasets: [{ label: 'Temp °C', data: [], borderColor: '#d32f2f', backgroundColor: 'rgba(211,47,47,0.1)', fill: true }] },
+  options: { scales: { x: { display: false }, y: { min: 0, max: 50 } }, plugins: { legend: { display: false } } }
+});
+
+// Water Chart
+const chartWaterCtx = document.getElementById('chartWater').getContext('2d');
+const chartWater = new Chart(chartWaterCtx, {
+  type: 'line',
+  data: { labels: [], datasets: [{ label: 'Water cm', data: [], borderColor: '#1976d2', backgroundColor: 'rgba(25,118,210,0.1)', fill: true }] },
+  options: { scales: { x: { display: false }, y: { min: 0, max: MAX_WATER_CM } }, plugins: { legend: { display: false } } }
+});
+
+// Fertilizer Chart
+const chartFertCtx = document.getElementById('chartFert').getContext('2d');
+const chartFert = new Chart(chartFertCtx, {
+  type: 'line',
+  data: { labels: [], datasets: [{ label: 'Fert cm', data: [], borderColor: '#fb8c00', backgroundColor: 'rgba(251,140,0,0.1)', fill: true }] },
+  options: { scales: { x: { display: false }, y: { min: 0, max: MAX_FERT_CM } }, plugins: { legend: { display: false } } }
+});
+
 // ==================== MQTT ====================
 const client = mqtt.connect('wss://mqtt.flespi.io:443',{username:'FlespiToken QGE7NyfGF3wfQDIaFbtlRbIAtNISsgmCRziAPBk6qcEbCKmE6Z4DnraLRnEKds8f'});
 client.on('connect',()=>{document.getElementById('connDot').style.background='#4caf50'; document.getElementById('connText').innerText='Connected';});
 client.subscribe('ttgo/all_sensors');
+
+// Array to store rows for export
+const storedRows=[];
+
 client.on('message',(topic,msg)=>{
   try{
     const d = JSON.parse(msg.toString());
+
+    // Soil Moisture
     const soilAvg = Number(d.soil_avg ?? d.soil ?? 0);
-    const tempVal = Number(d.temp ?? d.temperature ?? 0);
-    const waterCm = Number(d.water_level ?? d.water ?? 0);
-    const fertCm  = Number(d.fert_level ?? d.fert ?? 0);
-
     soilGauge.setValue(soilAvg);
-    tempGauge.setValue(tempVal);
     document.getElementById('soilValue').innerText = soilAvg.toFixed(1)+' %';
-    document.getElementById('tempValue').innerText = tempVal.toFixed(1)+' °C';
+    let soilStatus = '—', soilClass = 'muted';
+    if (soilAvg <= 40) { soilStatus = 'Dry'; soilClass = 'bad'; }
+    else if (soilAvg > 40) { soilStatus = 'Wet'; soilClass = 'ok'; }
+    document.getElementById('soilStatusText').innerHTML = `<span class="badge ${soilClass}">${soilStatus}</span>`;
 
+    // Temperature
+    const tempVal = Number(d.temp ?? d.temperature ?? 0);
+    tempGauge.setValue(tempVal);
+    document.getElementById('tempValue').innerText = tempVal.toFixed(1)+' °C';
+    let tempStatus = '—', tempClass = 'muted';
+    if (tempVal <= 30) { tempStatus = 'Warm'; tempClass = 'ok'; }
+    else if (tempVal > 30) { tempStatus = 'Hot'; tempClass = 'bad'; }
+    document.getElementById('tempStatusText').innerHTML = `<span class="badge ${tempClass}">${tempStatus}</span>`;
+
+    // Water Level
+    const waterCm = Number(d.water_level ?? d.water ?? 0);
     waveWater.setValue(waterCm);
+    let waterStatus = '—', waterClass = 'muted';
+    if (waterCm <= 20) { waterStatus = 'Low'; waterClass = 'bad'; }
+    else if (waterCm > 20) { waterStatus = 'Sufficient'; waterClass = 'ok'; }
+    document.getElementById('waterStatusText').innerHTML = `<span class="badge ${waterClass}">${waterStatus}</span>`;
+
+    // Fertilizer Level
+    const fertCm  = Number(d.fert_level ?? d.fert ?? 0);
     waveFert.setValue(fertCm);
-    document.getElementById('waterStatusText').innerHTML=`<span class="badge ok">${waterCm.toFixed(1)} cm</span>`;
-    document.getElementById('fertStatusText').innerHTML=`<span class="badge ok">${fertCm.toFixed(1)} cm</span>`;
+    let fertStatus = '—', fertClass = 'muted';
+    if (fertCm <= 20) { fertStatus = 'Low'; fertClass = 'bad'; }
+    else if (fertCm > 20) { fertStatus = 'Sufficient'; fertClass = 'ok'; }
+    document.getElementById('fertStatusText').innerHTML = `<span class="badge ${fertClass}">${fertStatus}</span>`;
+
+    // --- Chart update logic ---
+    const now = new Date().toLocaleTimeString();
+    chartSoil.data.labels.push(now);
+    chartSoil.data.datasets[0].data.push(soilAvg);
+    if (chartSoil.data.labels.length > maxPoints) {
+      chartSoil.data.labels.shift();
+      chartSoil.data.datasets[0].data.shift();
+    }
+    chartSoil.update();
+
+    chartTemp.data.labels.push(now);
+    chartTemp.data.datasets[0].data.push(tempVal);
+    if (chartTemp.data.labels.length > maxPoints) {
+      chartTemp.data.labels.shift();
+      chartTemp.data.datasets[0].data.shift();
+    }
+    chartTemp.update();
+
+    chartWater.data.labels.push(now);
+    chartWater.data.datasets[0].data.push(waterCm);
+    if (chartWater.data.labels.length > maxPoints) {
+      chartWater.data.labels.shift();
+      chartWater.data.datasets[0].data.shift();
+    }
+    chartWater.update();
+
+    chartFert.data.labels.push(now);
+    chartFert.data.datasets[0].data.push(fertCm);
+    if (chartFert.data.labels.length > maxPoints) {
+      chartFert.data.labels.shift();
+      chartFert.data.datasets[0].data.shift();
+    }
+    chartFert.update();
+
+    // --- Relay Status (relay1/relay2 as STRING) ---
+    // relay1: "ON"/"OFF", relay2: "Fertilizing"/"Waiting for Schedule"
+    let relay1Badge = document.getElementById('relay1Badge');
+    let relay2Badge = document.getElementById('relay2Badge');
+
+    if (typeof d.relay1 === "undefined" || d.relay1 === null || d.relay1 === "") {
+      relay1Badge.className = 'pump-badge muted';
+      relay1Badge.innerText = '—';
+    } else {
+      const relay1On = d.relay1 === "ON";
+      relay1Badge.className = 'pump-badge ' + (relay1On ? 'ok' : 'bad');
+      relay1Badge.innerText = relay1On ? 'ON' : 'OFF';
+    }
+
+    if (typeof d.relay2 === "undefined" || d.relay2 === null || d.relay2 === "") {
+      relay2Badge.className = 'pump-badge muted';
+      relay2Badge.innerText = '—';
+    } else {
+      const relay2Fertilizing = d.relay2 === "Fertilizing";
+      relay2Badge.className = 'pump-badge ' + (relay2Fertilizing ? 'ok' : 'bad');
+      relay2Badge.innerText = relay2Fertilizing ? 'Fertilizing' : 'Waiting';
+    }
+
+    // --- Data storage for export ---
+    storedRows.push([
+      new Date().toLocaleString(),
+      soilAvg,
+      tempVal,
+      waterCm,
+      fertCm,
+      relay1Badge.innerText,
+      relay2Badge.innerText
+    ]);
+    // Limit array size for browser RAM
+    if (storedRows.length > 5000) storedRows.shift();
+
   }catch(e){console.error(e);}
 });
 
 // ==================== Export to Excel ====================
-const storedRows=[];
 document.getElementById('exportBtn').addEventListener('click',()=>{
   if(storedRows.length===0){ alert('No data to export'); return; }
   const wb = XLSX.utils.book_new();
-  const ws = XLSX.utils.aoa_to_sheet([['Timestamp','Soil %','Temp °C','Water cm','Fertilizer cm'],...storedRows]);
+  const ws = XLSX.utils.aoa_to_sheet([
+    ['Timestamp','Soil %','Temp °C','Water cm','Fertilizer cm','Relay1','Relay2'],
+    ...storedRows
+  ]);
   XLSX.utils.book_append_sheet(wb,ws,'Sensor Data');
   XLSX.writeFile(wb,'sensor_data.xlsx');
 });
