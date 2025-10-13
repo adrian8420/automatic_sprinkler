@@ -1,317 +1,339 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>🌾 Automatic Water Sprinkler with Fertilization</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>🌾 Smart Farming Dashboard</title>
 
-<!-- Libraries -->
-<script src="https://cdn.jsdelivr.net/npm/mqtt/dist/mqtt.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+  <!-- CDN libs -->
+  <script src="https://cdn.jsdelivr.net/npm/mqtt/dist/mqtt.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
 
-<style>
-:root{
-  --bg:#f6fbf6;
-  --card:#ffffff;
-  --text:#153238;
-}
-body{
-  margin:0;
-  font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
-  background:var(--bg);
-  color:var(--text);
-}
-header{
-  background:linear-gradient(90deg,#fff,#eef9ef);
-  padding:16px 18px;
-  box-shadow:0 6px 18px rgba(10,30,20,0.06);
-  display:flex;
-  gap:12px;
-  align-items:center;
-}
-.logo{
-  width:44px;height:44px;border-radius:8px;
-  display:flex;align-items:center;justify-content:center;background:#eaf6ea;
-  margin-left:6px;
-}
-h1{font-size:18px;margin:0;}
-.subtitle{font-size:12px;color:#8899a6;margin-top:4px;}
+  <style>
+    :root{
+      --bg:#f6fbf6;
+      --card:#ffffff;
+      --accent:#4caf50;
+      --danger:#e53935;
+      --muted:#8899a6;
+      --text:#153238;
+    }
+    body{
+      margin:0;
+      font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial;
+      background:var(--bg);
+      color:var(--text);
+    }
+    header{
+      background:linear-gradient(90deg,#fff,#eef9ef);
+      padding:14px;
+      display:flex;
+      gap:12px;
+      align-items:center;
+      box-shadow:0 6px 18px rgba(10,30,20,0.06);
+    }
+    /* Logo area */
+    .logo {
+      width:56px;
+      height:56px;
+      border-radius:10px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      background:#eaf6ea;
+      box-shadow:0 4px 10px rgba(0,0,0,0.04);
+    }
+    .title-wrap { display:flex; flex-direction:column; }
+    h1 { font-size:18px; margin:0; }
+    .subtitle { font-size:12px; color:var(--muted); margin-top:4px; }
 
-/* Grid layout for 4 sensors */
-.grid{
-  max-width:1200px;
-  margin:18px auto;
-  padding:14px;
-  display:grid;
-  gap:18px;
-  grid-template-columns: repeat(4, 1fr);
-}
-@media (max-width: 1024px) { .grid { grid-template-columns: repeat(2, 1fr); } }
-@media (max-width: 600px)  { .grid { grid-template-columns: 1fr; } }
+    .grid{
+      max-width:1200px;
+      margin:18px auto;
+      padding:14px;
+      display:grid;
+      gap:18px;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    }
+    .card{
+      background:var(--card);
+      padding:14px;
+      border-radius:12px;
+      box-shadow:0 8px 24px rgba(10,30,20,0.04);
+    }
+    .card h3 { margin:6px 0 10px; font-size:15px; }
+    .gauge-area { display:flex; flex-direction:column; align-items:center; gap:8px; }
+    .value-large { font-weight:700; font-size:18px; margin-top:6px; }
+    .status { font-weight:700; font-size:14px; margin-top:6px; }
+    .bar { height:20px; background:#eee; border-radius:10px; overflow:hidden; margin-top:8px; width:100%; }
+    .bar-fill { height:100%; transition:none; } /* no animation per request */
+    .bar-label { margin-top:6px; font-size:13px; color:var(--muted); }
 
-/* Cards */
-.card{
-  display:flex;
-  flex-direction: column;
-  justify-content: space-between;
-  background: var(--card);
-  padding: 14px;
-  border-radius: 12px;
-  box-shadow: 0 8px 24px rgba(10,30,20,0.04);
-  min-height: 450px;
-}
-.card h3{margin:6px 0 10px;font-size:15px;}
-.gauge-area{
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  gap: 8px;
-  min-height: 180px;
-}
-.status{
-  font-weight:700;
-  font-size:14px;
-  margin-top:6px;
-  display:flex;
-  justify-content:center;
-  align-items:center;
-}
-/* All badges have black text and no background */
-.badge{
-  display:inline-block;
-  padding:6px 10px;
-  border-radius:8px;
-  font-weight:700;
-  background:transparent !important;
-  color:black !important;
-}
+    canvas { display:block; margin:12px auto; max-width:100%; height:160px; }
 
-/* Canvas sizes */
-canvas { width: 260px !important; height: 150px !important; display: block; margin:0 auto; }
-.chart-small { width: 260px !important; height: 150px !important; }
+    .pumps { display:flex; gap:12px; flex-wrap:wrap; justify-content:center; margin-top:8px; }
+    .pump-box { min-width:160px; padding:10px; border-radius:10px; background:#fbfff9; text-align:center; box-shadow:0 8px 18px rgba(10,30,20,0.03); }
+    .pump-label { font-weight:700; margin-bottom:6px; }
 
-.pumps {
-  display:flex;
-  gap:12px;
-  flex-wrap:wrap;
-  justify-content:center;
-  margin-top:8px;
-}
-.pump-box { min-width:160px;padding:10px;border-radius:10px;background:#fbfff9;text-align:center;box-shadow:0 8px 18px rgba(10,30,20,0.03); }
-.export-btn { display:block;margin:16px auto;padding:10px 14px;border-radius:10px;background:#4caf50;color:#fff;border:none;font-weight:700;cursor:pointer; }
-.export-btn:active{transform:translateY(1px);}
-@media (max-width:420px){ canvas{max-width:200px; height:120px !important;} }
-</style>
+    .export-btn { display:block; margin:16px auto; padding:10px 14px; border-radius:10px; background:var(--accent); color:#fff; border:none; font-weight:700; cursor:pointer; }
+    .export-btn:active { transform: translateY(1px); }
+
+    .badge { display:inline-block; padding:6px 10px; border-radius:8px; color:#fff; font-weight:700; }
+    .muted { background:var(--muted); }
+    .ok { background:var(--accent); }
+    .bad { background:var(--danger); }
+
+    @media (max-width:420px){
+      canvas { height:140px; }
+    }
+  </style>
 </head>
 <body>
 
-<header>
-  <div class="logo" aria-hidden="true">
-    <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M12 2C9.8 2 8 3.8 8 6c0 1.5.8 2.8 2 3.5V11l-2 4h8l-2-4V9.5c1.2-.7 2-2 2-3.5 0-2.2-1.8-4-4-4z" fill="#4CAF50"/>
-      <path d="M3 20c0-4 4-8 9-8s9 4 9 8H3z" fill="#2E7D32"/>
-    </svg>
-  </div>
-  <div>
-    <h1>Automatic Water Sprinkler with Fertilization</h1>
-    <div class="subtitle">Live MQTT (Flespi) · topic: <strong>ttgo/all_sensors</strong></div>
-  </div>
-</header>
-
-<main class="grid">
-  <!-- Temperature Card -->
-  <section class="card" id="tempCard">
-    <h3>🌡️ Temperature (°C)</h3>
-    <div class="gauge-area">
-      <canvas id="tempGauge"></canvas>
-      <div id="tempStatus" class="status"><span class="badge">--</span></div>
+  <header>
+    <div class="logo" aria-hidden="true">
+      <!-- inline farming SVG/logo (you can replace with your own image if needed) -->
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M12 2C9.8 2 8 3.8 8 6c0 1.5.8 2.8 2 3.5V11l-2 4h8l-2-4V9.5c1.2-.7 2-2 2-3.5 0-2.2-1.8-4-4-4z" fill="#4CAF50"/>
+        <path d="M3 20c0-4 4-8 9-8s9 4 9 8H3z" fill="#2E7D32"/>
+      </svg>
     </div>
-    <h4 style="margin-top:12px;">Live Chart</h4>
-    <canvas id="tempChart" class="chart-small"></canvas>
+    <div class="title-wrap">
+      <h1>Smart Farming Dashboard</h1>
+      <div class="subtitle">Live MQTT (Flespi) · topic: <strong>ttgo/all_sensors</strong></div>
+    </div>
+  </header>
+
+  <!-- Main grid -->
+  <main class="grid">
+    <!-- Temperature -->
+    <section class="card" id="tempCard">
+      <h3>🌡️ Temperature (°C)</h3>
+      <div class="gauge-area">
+        <div class="bar"><div id="tempFill" class="bar-fill" style="width:0%;background:#d32f2f;"></div></div>
+        <div id="tempValue" class="value-large">-- °C</div>
+        <div id="tempStatus" class="status"><span class="badge muted">--</span></div>
+      </div>
+      <canvas id="tempChart"></canvas>
+    </section>
+
+    <!-- Soil -->
+    <section class="card" id="soilCard">
+      <h3>🌱 Soil Moisture (%)</h3>
+      <div class="gauge-area">
+        <div class="bar"><div id="soilFill" class="bar-fill" style="width:0%;background:#2e7d32;"></div></div>
+        <div id="soilValue" class="value-large">-- %</div>
+        <div id="soilStatus" class="status"><span class="badge muted">--</span></div>
+      </div>
+      <canvas id="soilChart"></canvas>
+    </section>
+
+    <!-- Water -->
+    <section class="card" id="waterCard">
+      <h3>💧 Water Level (cm)</h3>
+      <div style="display:flex;flex-direction:column;align-items:center;">
+        <div class="bar" style="width:100%;"><div id="waterFill" class="bar-fill" style="width:0%;background:#1976d2;"></div></div>
+        <div id="waterValue" class="value-large">-- cm</div>
+        <div id="waterStatus" class="status"><span class="badge muted">--</span></div>
+      </div>
+      <canvas id="waterChart"></canvas>
+    </section>
+
+    <!-- Fertilizer -->
+    <section class="card" id="fertCard">
+      <h3>🧪 Fertilizer Level (cm)</h3>
+      <div style="display:flex;flex-direction:column;align-items:center;">
+        <div class="bar" style="width:100%;"><div id="fertFill" class="bar-fill" style="width:0%;background:#fb8c00;"></div></div>
+        <div id="fertValue" class="value-large">-- cm</div>
+        <div id="fertStatus" class="status"><span class="badge muted">Schedule for Fertilizing Monday 6AM</span></div>
+      </div>
+      <canvas id="fertChart"></canvas>
+    </section>
+  </main>
+
+  <!-- Pumps + Export -->
+  <section style="max-width:1200px;margin:0 auto;padding:0 14px 36px;">
+    <div class="pumps" style="justify-content:center;">
+      <div class="pump-box">
+        <div class="pump-label">Pump1</div>
+        <div id="pump1Badge" class="badge muted">—</div>
+      </div>
+      <div class="pump-box">
+        <div class="pump-label">Pump2</div>
+        <div id="pump2Badge" class="badge muted">—</div>
+      </div>
+    </div>
+
+    <button class="export-btn" id="exportBtn">📦 Export to Excel (.xlsx)</button>
   </section>
-
-  <!-- Soil Card -->
-  <section class="card" id="soilCard">
-    <h3>🌱 Soil Moisture (%)</h3>
-    <div class="gauge-area">
-      <canvas id="soilGauge"></canvas>
-      <div id="soilStatus" class="status"><span class="badge">--</span></div>
-    </div>
-    <h4 style="margin-top:12px;">Live Chart</h4>
-    <canvas id="soilChart" class="chart-small"></canvas>
-  </section>
-
-  <!-- Water Card (Wave) -->
-  <section class="card" id="waterCard">
-    <h3>💧 Water Level (cm)</h3>
-    <div class="gauge-area">
-      <canvas id="waterGauge"></canvas>
-      <div id="waterStatus" class="status"><span class="badge">--</span></div>
-    </div>
-    <h4 style="margin-top:12px;">Live Chart (cm)</h4>
-    <canvas id="waterChart" class="chart-small"></canvas>
-  </section>
-
-  <!-- Fertilizer Card (Wave) -->
-  <section class="card" id="fertCard">
-    <h3>🧪 Fertilizer Level (cm)</h3>
-    <div class="gauge-area">
-      <canvas id="fertGauge"></canvas>
-      <div id="fertStatus" class="status"><span class="badge">Schedule for Fertilizing Monday 6 AM ⏰</span></div>
-    </div>
-    <h4 style="margin-top:12px;">Live Chart (cm)</h4>
-    <canvas id="fertChart" class="chart-small"></canvas>
-  </section>
-</main>
-
-<section style="max-width:1200px;margin:0 auto 36px;padding:0 14px;">
-  <div class="pumps">
-    <div class="pump-box">
-      <div style="font-weight:700;margin-bottom:6px;">Pump1</div>
-      <div id="pump1Badge" class="badge">—</div>
-    </div>
-    <div class="pump-box">
-      <div style="font-weight:700;margin-bottom:6px;">Pump2</div>
-      <div id="pump2Badge" class="badge">—</div>
-    </div>
-  </div>
-
-  <button class="export-btn" id="exportBtn">📦 Export to Excel (.xlsx)</button>
-</section>
 
 <script>
-// ========= CONFIG & HELPERS =========
+/* -----------------------
+   MQTT / Export / Charts
+   ----------------------- */
+
+/* Replace token below with your Flespi token (already included per previous conversation) */
 const FLESPI_TOKEN = 'QGE7NyfGF3wfQDIaFbtlRbIAtNISsgmCRziAPBk6qcEbCKmE6Z4DnraLRnEKds8f';
 const MQTT_TOPIC = 'ttgo/all_sensors';
-const WATER_MAX_CM = 80;
-const FERT_MAX_CM = 50;
 
-function setBadge(elId,text){ 
-  const el=document.getElementById(elId); 
-  if(el) el.textContent=text; 
+/* Chart.js helper, animations disabled */
+function makeLine(canvasId, label, color, suggestedMax){
+  const ctx = document.getElementById(canvasId).getContext('2d');
+  return new Chart(ctx, {
+    type: 'line',
+    data: { labels: [], datasets: [{ label, data: [], borderColor: color, backgroundColor: color, fill: false, pointRadius: 0, tension: 0 }] },
+    options: {
+      animation: false,
+      responsive: true,
+      scales: {
+        x: { display: true },
+        y: { display: true, beginAtZero: true, suggestedMax: suggestedMax ?? undefined }
+      },
+      plugins: { legend: { display: false } }
+    }
+  });
 }
-function clamp(v,min,max){ return Math.max(min,Math.min(max,v)); }
-function inferPump1(relay1){
-  if(relay1===undefined||relay1===null) return 'UNKNOWN';
-  const s=String(relay1).toLowerCase();
-  if(['1','on','true'].includes(s)||s.includes('dry')) return 'ON';
-  if(['0','off','false'].includes(s)||s.includes('wet')) return 'OFF';
-  return relay1;
+
+const tempChart = makeLine('tempChart','Temperature (°C)','#d32f2f',60);
+const soilChart = makeLine('soilChart','Soil Moisture (%)','#2e7d32',100);
+const waterChart = makeLine('waterChart','Water Level (cm)','#1976d2');
+const fertChart  = makeLine('fertChart','Fertilizer Level (cm)','#fb8c00');
+
+const storedRows = []; // for Excel
+
+/* small helpers */
+function setBadge(elId, text, kind='muted'){
+  const el = document.getElementById(elId);
+  el.textContent = text;
+  el.className = 'badge ' + (kind === 'ok' ? 'ok' : (kind === 'bad' ? 'bad' : 'muted'));
 }
-function inferPump2(relay2){
-  if(relay2===undefined||relay2===null) return 'Waiting for Schedule';
-  const s=String(relay2).toLowerCase();
-  if(s==='1'||s==='on'||s.includes('fertil')) return 'Fertilizing';
+function clampPercentForBar(value){
+  // Use raw reading for label; for visual bar, clip to 0..100% to keep layout sane
+  if (isFinite(value) === false) return 0;
+  return Math.min(100, Math.max(0, Number(value)));
+}
+/* infer pump states (robust) */
+function inferPump1(v){
+  if (v === undefined || v === null) return 'UNKNOWN';
+  const s = String(v).toLowerCase();
+  if (s === 'dry' || s === '1' || s === 'on' || s === 'true' || s.includes('on')) return 'ON';
+  if (s === 'wet' || s === '0' || s === 'off' || s === 'false' || s.includes('off')) return 'OFF';
+  return String(v);
+}
+function inferPump2(v){
+  if (v === undefined || v === null) return 'Waiting for Schedule';
+  const s = String(v).toLowerCase();
+  if (s === '1' || s === 'on' || s.includes('fertil') || s.includes('on')) return 'Fertilizing';
   return 'Waiting for Schedule';
 }
 
-// ========= CHARTS & GAUGES =========
-function createGauge(ctx){ return new Chart(ctx,{type:'doughnut',data:{datasets:[{data:[0,1],backgroundColor:['#4CAF50','#eef7ef'],borderWidth:0}]},options:{animation:false,cutout:'70%',rotation:-90,circumference:180,plugins:{legend:{display:false},tooltip:{enabled:false}}}});}
-function updateGauge(chart,value,max){ chart.data.datasets[0].data=[clamp(value/max*100,0,100),100-clamp(value/max*100,0,100)]; chart.update();}
+/* Connect to Flespi (WebSocket) */
+const client = mqtt.connect('wss://mqtt.flespi.io:443', {
+  username: 'FlespiToken ' + FLESPI_TOKEN
+});
+client.on('connect', ()=> {
+  console.log('Connected to Flespi MQTT');
+  client.subscribe(MQTT_TOPIC, (err)=> { if(err) console.error('Subscribe error', err); });
+});
+client.on('error', (e)=> console.error('MQTT error', e));
 
-function createWave(ctx,color,max){ return new Chart(ctx,{type:'doughnut',data:{datasets:[{data:[0,max],backgroundColor:[color,'#eef7ef'],borderWidth:0}]},options:{animation:false,cutout:'70%',rotation:-90,circumference:180,plugins:{legend:{display:false},tooltip:{enabled:false},beforeDraw(chart){const dataset=chart.data.datasets[0]; const value=dataset.data[0]; const percent=value/max; const ctx=chart.ctx; const w=chart.width,h=chart.height; ctx.save(); ctx.fillStyle=color+'33'; ctx.beginPath(); const waveH=h*percent; ctx.moveTo(0,h); ctx.quadraticCurveTo(w/4,h-waveH*1.2,w/2,h-waveH); ctx.quadraticCurveTo(3*w/4,h-waveH*0.8,w,h-waveH); ctx.lineTo(w,h); ctx.closePath(); ctx.fill(); ctx.restore();}}}});}
-function updateWave(chart,value){ chart.data.datasets[0].data=[value,chart.data.datasets[0].data[1]]; chart.update();}
+/* keep limited history (avoid memory growth) */
+const MAX_POINTS = 120;
+const history = { t:[], temp:[], soil:[], water:[], fert:[] };
 
-function createLine(ctx,label,max){ return new Chart(ctx,{type:'line',data:{labels:[],datasets:[{label,label,data:[],borderColor:'#1976d2',tension:0.1,pointRadius:0}]},options:{animation:false,responsive:true,scales:{x:{display:true},y:{display:true,beginAtZero:true,suggestedMax:max}},plugins:{legend:{display:false}}}});}
+/* incoming messages */
+client.on('message', (topic, message) => {
+  try {
+    const raw = message.toString();
+    const d = JSON.parse(raw);
 
-// Create charts
-const tempGauge=createGauge(document.getElementById('tempGauge').getContext('2d'));
-const soilGauge=createGauge(document.getElementById('soilGauge').getContext('2d'));
-const waterGauge=createWave(document.getElementById('waterGauge').getContext('2d'),'#2196f3',WATER_MAX_CM);
-const fertGauge=createWave(document.getElementById('fertGauge').getContext('2d'),'#ff9800',FERT_MAX_CM);
+    // accept several key variants
+    const temp = Number(d.temp ?? d.temperature ?? d.temp_c ?? 0);
+    const soil = Number(d.soil_avg ?? d.soil ?? d.soil_moisture ?? 0);
+    const waterCm = Number(d.water_level ?? d.waterLevel ?? d.water ?? 0);
+    const fertCm  = Number(d.fert_level ?? d.fertLevel ?? d.fert ?? 0);
+    const relay1 = d.relay1 ?? d.relay ?? d.pump1 ?? null;
+    const relay2 = d.relay2 ?? d.relay_2 ?? d.pump2 ?? null;
+    const ts = d.timestamp ?? new Date().toISOString();
 
-const tempLine=createLine(document.getElementById('tempChart').getContext('2d'),'Temperature',60);
-const soilLine=createLine(document.getElementById('soilChart').getContext('2d'),'Soil (%)',100);
-const waterLine=createLine(document.getElementById('waterChart').getContext('2d'),'Water (cm)',WATER_MAX_CM);
-const fertLine=createLine(document.getElementById('fertChart').getContext('2d'),'Fertilizer (cm)',FERT_MAX_CM);
+    // update bars (visual width clipped to 0..100%)
+    document.getElementById('tempFill').style.width  = clampPercentForBar((temp/60)*100) + '%';
+    document.getElementById('soilFill').style.width  = clampPercentForBar(soil) + '%';
+    document.getElementById('waterFill').style.width = clampPercentForBar(waterCm) + '%';
+    document.getElementById('fertFill').style.width  = clampPercentForBar(fertCm) + '%';
 
-const MAX_POINTS=120;
-const history={time:[],temp:[],soil:[],water:[],fert:[]};
+    // update numeric labels (show raw units)
+    document.getElementById('tempValue').textContent = isFinite(temp) ? `${temp.toFixed(1)} °C` : '-- °C';
+    document.getElementById('soilValue').textContent = isFinite(soil) ? `${soil.toFixed(1)} %` : '-- %';
+    document.getElementById('waterValue').textContent = isFinite(waterCm) ? `${waterCm.toFixed(1)} cm` : '-- cm';
+    document.getElementById('fertValue').textContent = isFinite(fertCm) ? `${fertCm.toFixed(1)} cm` : '-- cm';
 
-// Center text
-function drawCenterText(canvasElem,text){
-  try{
-    const ctx=canvasElem.getContext('2d');
-    const w=canvasElem.width,h=canvasElem.height;
-    ctx.clearRect((w/2)-40,(h/2)-24,80,48);
-    ctx.fillStyle='#153238';
-    ctx.font='bold 14px Arial';
-    ctx.textAlign='center';
-    ctx.textBaseline='middle';
-    ctx.fillText(text,w/2,h/2-5);
-  }catch(e){}
-}
+    // status logic
+    const tempIsHot = isFinite(temp) && temp > 30;
+    setBadge('tempStatus', tempIsHot ? '🔥 Hot' : '🌤️ Warm', tempIsHot ? 'bad' : 'ok');
 
-// ========= MQTT =========
-const client=mqtt.connect('wss://mqtt.flespi.io:443',{username:'FlespiToken '+FLESPI_TOKEN});
-client.on('connect',()=>{client.subscribe(MQTT_TOPIC);});
-client.on('message',(topic,message)=>{
-  try{
-    const data=JSON.parse(message.toString());
-    const temp=Number(data.temp??data.temperature??0);
-    const soil=Number(data.soil_avg??data.soil??0);
-    const waterCm=Number(data.water_level??data.water??0);
-    const fertCm=Number(data.fert_level??data.fert??0);
-    const relay1=data.relay1??null;
-    const relay2=data.relay2??null;
-    const timestamp=data.timestamp??new Date().toISOString();
+    const soilIsWet = isFinite(soil) && soil > 40;
+    setBadge('soilStatus', soilIsWet ? '💧 Wet' : '🌵 Dry', soilIsWet ? 'ok' : 'bad');
 
-    updateGauge(tempGauge,temp,60);
-    updateGauge(soilGauge,soil,100);
-    updateWave(waterGauge,waterCm);
-    updateWave(fertGauge,fertCm);
+    const waterSufficient = isFinite(waterCm) && waterCm > 30;
+    setBadge('waterStatus', waterSufficient ? '💦 Water is Sufficient' : '🚱 Water is Not Sufficient', waterSufficient ? 'ok' : 'bad');
 
-    drawCenterText(document.getElementById('tempGauge'),`${temp.toFixed(1)}°C`);
-    drawCenterText(document.getElementById('soilGauge'),`${soil.toFixed(1)}%`);
-    drawCenterText(document.getElementById('waterGauge'),`${waterCm.toFixed(1)} cm`);
-    drawCenterText(document.getElementById('fertGauge'),`${fertCm.toFixed(1)} cm`);
+    setBadge('fertStatus', 'Schedule for Fertilizing Monday 6AM', 'muted');
 
-    setBadge('tempStatus', temp<=30?'🌤️ Warm':'🔥 Hot');
-    setBadge('soilStatus', soil<=40?'🌵 Dry':'💧 Wet');
-    setBadge('waterStatus', waterCm<=30?'🚱 Not Sufficient':'💦 Sufficient');
-    setBadge('fertStatus','Schedule for Fertilizing Monday 6 AM ⏰');
+    // pumps
+    const p1 = inferPump1(relay1);
+    setBadge('pump1Badge', p1 === 'ON' ? '🟢 ON' : (p1 === 'OFF' ? '🔴 OFF' : p1), p1 === 'ON' ? 'ok' : (p1 === 'OFF' ? 'bad' : 'muted'));
+    const p2state = inferPump2(relay2);
+    setBadge('pump2Badge', p2state === 'Fertilizing' ? '🧪 Fertilizing' : '⏳ Waiting for Schedule', p2state === 'Fertilizing' ? 'ok' : 'muted');
 
-    setBadge('pump1Badge',inferPump1(relay1)==='ON'?'🟢 ON':'🔴 OFF');
-    const p2=inferPump2(relay2);
-    setBadge('pump2Badge',p2==='Fertilizing'?'🧪 Fertilizing':'⏳ Waiting for Schedule');
-
-    // update line charts
-    const label=new Date(timestamp).toLocaleTimeString();
-    history.time.push(label); if(history.time.length>MAX_POINTS) history.time.shift();
+    // push history & update charts
+    const label = new Date(ts).toLocaleTimeString();
+    history.t.push(label); if(history.t.length>MAX_POINTS) history.t.shift();
     history.temp.push(temp); if(history.temp.length>MAX_POINTS) history.temp.shift();
     history.soil.push(soil); if(history.soil.length>MAX_POINTS) history.soil.shift();
     history.water.push(waterCm); if(history.water.length>MAX_POINTS) history.water.shift();
     history.fert.push(fertCm); if(history.fert.length>MAX_POINTS) history.fert.shift();
 
-    [tempLine,soilLine,waterLine,fertLine].forEach((chart,i)=>{
-      chart.data.labels=history.time.slice();
-      chart.data.datasets[0].data=[history.temp,history.soil,history.water,history.fert][i].slice();
-      chart.update();
-    });
+    tempChart.data.labels = history.t.slice(); tempChart.data.datasets[0].data = history.temp.slice(); tempChart.update();
+    soilChart.data.labels = history.t.slice(); soilChart.data.datasets[0].data = history.soil.slice(); soilChart.update();
+    waterChart.data.labels = history.t.slice(); waterChart.data.datasets[0].data = history.water.slice(); waterChart.update();
+    fertChart.data.labels = history.t.slice(); fertChart.data.datasets[0].data = history.fert.slice(); fertChart.update();
 
-    // export rows
-    exportRows.push({timestamp,temp,soil_avg:soil,water_cm:waterCm,fert_cm:fertCm,relay1,relay2});
-    if(exportRows.length>5000) exportRows.shift();
-  }catch(e){console.error(e);}
+    // store for Excel
+    storedRows.push({ timestamp: ts, temp, soil_avg: soil, water_cm: waterCm, fert_cm: fertCm, relay1, relay2 });
+    if (storedRows.length > 10000) storedRows.shift();
+
+  } catch(err){
+    console.error('Failed to parse MQTT message', err);
+  }
 });
 
-// ========= Export Excel =========
-document.getElementById('exportBtn').addEventListener('click',()=>{
-  if(exportRows.length===0){alert('No data to export yet'); return;}
-  const aoa=[["timestamp","temp (°C)","soil_avg (%)","water_cm","fert_cm","relay1","relay2"]].concat(exportRows.map(r=>[r.timestamp,r.temp,r.soil_avg,r.water_cm,r.fert_cm,r.relay1,r.relay2]));
-  const ws=XLSX.utils.aoa_to_sheet(aoa);
-  const wb=XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb,ws,'Sensor Data');
-  const dt=new Date();
-  const fname=`SmartFarmData_${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}_${String(dt.getHours()).padStart(2,'0')}${String(dt.getMinutes()).padStart(2,'0')}.xlsx`;
-  XLSX.writeFile(wb,fname);
+/* Export to Excel */
+document.getElementById('exportBtn').addEventListener('click', () => {
+  if (!storedRows || storedRows.length === 0) { alert('No data to export yet'); return; }
+  const header = ["timestamp","temp (°C)","soil_avg (%)","water_cm","fert_cm","relay1","relay2"];
+  const aoa = [header].concat(storedRows.map(r => [r.timestamp, r.temp, r.soil_avg, r.water_cm, r.fert_cm, r.relay1, r.relay2]));
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Sensor Data');
+  const now = new Date();
+  const fname = `SmartFarmData_${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}.xlsx`;
+  XLSX.writeFile(wb, fname);
 });
 
-// Initialize badges
-['tempStatus','soilStatus','waterStatus','fertStatus','pump1Badge','pump2Badge'].forEach(id=>setBadge(id,'--'));
-setBadge('fertStatus','Schedule for Fertilizing Monday 6 AM ⏰');
+/* initialize UI placeholders */
+document.getElementById('tempValue').textContent = '-- °C';
+document.getElementById('soilValue').textContent = '-- %';
+document.getElementById('waterValue').textContent = '-- cm';
+document.getElementById('fertValue').textContent = '-- cm';
+setBadge('tempStatus','--','muted');
+setBadge('soilStatus','--','muted');
+setBadge('waterStatus','--','muted');
+setBadge('fertStatus','Schedule for Fertilizing Monday 6AM','muted');
+setBadge('pump1Badge','—','muted');
+setBadge('pump2Badge','—','muted');
+
 </script>
 </body>
 </html>
