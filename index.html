@@ -183,9 +183,97 @@ canvas { display:block; }
 
 <!-- Row 3: Relays -->
 <section class="status-row">
-  <div class="pump-box"><div class="pump-label">Pump1</div><div id="relay1Badge" class="pump-badge muted">—</div><div class="small-muted">Control: automatic irrigation logic</div></div>
-  <div class="pump-box"><div class="pump-label">Pump2</div><div id="relay2Badge" class="pump-badge muted">—</div><div class="small-muted">Schedule: Monday 6AM</div></div>
+  <div class="pump-box"><div class="pump-label">Pump1</div><div id="relay1Badge" class="pump-badge muted">—</div><div class="small-muted">Control: automatic Irrigation</div></div>
+  <div class="pump-box"><div class="pump-label">Pump2</div><div id="relay2Badge" class="pump-badge muted">—</div><div class="small-muted">Control: automatic Fertilizing</div></div>
 </section>
+
+<!-- 🌾 FERTILIZING SCHEDULE CONTROL -->
+<section class="card" id="fertilizerSchedule" style="text-align:center;">
+  <h3>🧪 Fertilizing Schedule Control</h3>
+
+  <div style="display:flex; flex-wrap:wrap; justify-content:center; align-items:center; gap:8px;">
+    <label>Day:
+      <select id="fertDay">
+        <option>Monday</option><option>Tuesday</option><option>Wednesday</option>
+        <option>Thursday</option><option>Friday</option><option>Saturday</option><option>Sunday</option>
+      </select>
+    </label>
+    <label>Time:
+      <input type="time" id="fertTime">
+    </label>
+    <label>Duration (min):
+      <input type="number" id="fertDuration" min="1" max="60" value="10" style="width:60px;">
+    </label>
+    <button id="saveFertSchedule" style="padding:6px 10px; background:#4caf50; color:#fff; border:none; border-radius:6px; cursor:pointer;">💾 Save</button>
+
+    <span id="nextFertCountdown" style="margin-left:10px; font-size:14px; color:gray;">
+      Next fertilization in: --
+    </span>
+  </div>
+</section>
+
+<script>
+  // === Restore saved schedule ===
+  const fertDay = document.getElementById("fertDay");
+  const fertTime = document.getElementById("fertTime");
+  const fertDuration = document.getElementById("fertDuration");
+  const countdownEl = document.getElementById("nextFertCountdown");
+
+  const saved = JSON.parse(localStorage.getItem("fertilizerSchedule")) || {};
+  if (saved.day) fertDay.value = saved.day;
+  if (saved.time) fertTime.value = saved.time;
+  if (saved.duration) fertDuration.value = saved.duration;
+
+  // === Save schedule + publish ===
+  document.getElementById("saveFertSchedule").addEventListener("click", () => {
+    const schedule = {
+      day: fertDay.value,
+      time: fertTime.value,
+      duration: fertDuration.value
+    };
+    localStorage.setItem("fertilizerSchedule", JSON.stringify(schedule));
+
+    // Publish to MQTT if connected
+    if (window.client && client.connected) {
+      client.publish("ttgo/fertilizer_schedule", JSON.stringify(schedule));
+    }
+
+    updateCountdown();
+  });
+
+  // === Countdown updater ===
+  function updateCountdown() {
+    const day = fertDay.value;
+    const time = fertTime.value;
+    if (!day || !time) {
+      countdownEl.textContent = "Next fertilization in: --";
+      return;
+    }
+
+    const now = new Date();
+    const target = new Date(now);
+    const days = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+    const targetDay = days.indexOf(day);
+
+    let diffDays = targetDay - now.getDay();
+    if (diffDays < 0 || (diffDays === 0 && time <= now.toTimeString().slice(0,5))) diffDays += 7;
+    target.setDate(now.getDate() + diffDays);
+    const [hh, mm] = time.split(":").map(Number);
+    target.setHours(hh, mm, 0, 0);
+
+    const diffMs = target - now;
+    const diffMin = Math.floor(diffMs / 60000);
+    const d = Math.floor(diffMin / 1440);
+    const h = Math.floor((diffMin % 1440) / 60);
+    const m = diffMin % 60;
+
+    countdownEl.textContent = `Next fertilization in: ${d}d ${h}h ${m}m`;
+  }
+
+  // auto-update every minute
+  updateCountdown();
+  setInterval(updateCountdown, 60000);
+</script>
 
 <!-- bottom export -->
 <section class="export-wrap">
