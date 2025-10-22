@@ -219,10 +219,23 @@ canvas { display:block; }
   const fertDuration = document.getElementById("fertDuration");
   const countdownEl = document.getElementById("nextFertCountdown");
 
+  // Load saved schedule from localStorage
   const saved = JSON.parse(localStorage.getItem("fertilizerSchedule")) || {};
   if (saved.day) fertDay.value = saved.day;
   if (saved.time) fertTime.value = saved.time;
   if (saved.duration) fertDuration.value = saved.duration;
+
+  // Function to publish schedule to MQTT
+  function publishSchedule(schedule) {
+    if (window.client && client.connected) {
+      client.publish("ttgo/fertilizer_schedule", JSON.stringify(schedule));
+      console.log("📡 Published schedule to ESP32:", schedule);
+    } else {
+      console.warn("⚠️ MQTT not connected. Schedule will resend on reconnect.");
+      // Store temporarily to resend after reconnect
+      window.pendingSchedule = schedule;
+    }
+  }
 
   // === Save schedule + publish ===
   document.getElementById("saveFertSchedule").addEventListener("click", () => {
@@ -232,12 +245,7 @@ canvas { display:block; }
       duration: fertDuration.value
     };
     localStorage.setItem("fertilizerSchedule", JSON.stringify(schedule));
-
-    // Publish to MQTT if connected
-    if (window.client && client.connected) {
-      client.publish("ttgo/fertilizer_schedule", JSON.stringify(schedule));
-    }
-
+    publishSchedule(schedule);
     updateCountdown();
   });
 
@@ -270,9 +278,29 @@ canvas { display:block; }
     countdownEl.textContent = `Next fertilization in: ${d}d ${h}h ${m}m`;
   }
 
-  // auto-update every minute
+  // Auto-update every minute
   updateCountdown();
   setInterval(updateCountdown, 60000);
+
+  // === Re-publish schedule automatically after refresh ===
+  window.addEventListener("load", () => {
+    if (saved.day && saved.time && saved.duration) {
+      publishSchedule(saved);
+      updateCountdown();
+    }
+  });
+
+  // === Re-publish after MQTT reconnect ===
+  if (window.client) {
+    client.on("connect", () => {
+      if (window.pendingSchedule) {
+        publishSchedule(window.pendingSchedule);
+        window.pendingSchedule = null;
+      } else if (saved.day && saved.time) {
+        publishSchedule(saved);
+      }
+    });
+  }
 </script>
 
 <!-- bottom export -->
