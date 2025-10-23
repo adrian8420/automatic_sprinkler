@@ -471,6 +471,8 @@ const chartFert = new Chart(chartFertCtx, {
 const client = mqtt.connect('wss://mqtt.flespi.io:443',{username:'FlespiToken QGE7NyfGF3wfQDIaFbtlRbIAtNISsgmCRziAPBk6qcEbCKmE6Z4DnraLRnEKds8f'});
 client.on('connect',()=>{document.getElementById('connDot').style.background='#4caf50'; document.getElementById('connText').innerText='Connected';});
 client.subscribe('ttgo/all_sensors');
+ client.subscribe('ttgo/fertilizer_schedule/state', { qos: 1 })
+
 // === Manual Pump1 Control ===
 const pump1OnBtn = document.getElementById("pump1OnBtn");
 const pump1OffBtn = document.getElementById("pump1OffBtn");
