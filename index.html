@@ -69,7 +69,32 @@ h1 { font-size:18px; margin:0; }
   gap:var(--gap);
   grid-template-columns: repeat(4, 1fr);
 }
+.pump-btn {
+    background: #fff;
+    color: #333;
+    border: 2px solid #ccc;
+    border-radius: 8px;
+    padding: 6px 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
 
+  .pump-btn:hover {
+    border-color: #999;
+  }
+
+  .pump-btn.active-on {
+    background: #4caf50;
+    color: #fff;
+    border-color: #4caf50;
+  }
+
+  .pump-btn.active-off {
+    background: #e53935;
+    color: #fff;
+    border-color: #e53935;
+  }
 @media (max-width:1100px){
   .grid { grid-template-columns: repeat(2, 1fr); }
 }
@@ -183,7 +208,16 @@ canvas { display:block; }
 
 <!-- Row 3: Relays -->
 <section class="status-row">
-  <div class="pump-box"><div class="pump-label">Pump1</div><div id="relay1Badge" class="pump-badge muted">—</div><div class="small-muted">Control: automatic Irrigation</div></div>
+ <div class="pump-box">
+  <div class="pump-label">Pump1</div>
+  <div id="relay1Badge" class="pump-badge muted">—</div>
+  <div class="small-muted">Control: automatic Irrigation</div>
+
+  <div style="margin-top:10px; display:flex; gap:8px; justify-content:center;">
+    <button id="pump1OnBtn" class="pump-btn">ON</button>
+    <button id="pump1OffBtn" class="pump-btn">OFF</button>
+  </div>
+</div>
   <div class="pump-box"><div class="pump-label">Pump2</div><div id="relay2Badge" class="pump-badge muted">—</div><div class="small-muted">Control: automatic Fertilizing</div></div>
 </section>
 
@@ -437,6 +471,37 @@ const chartFert = new Chart(chartFertCtx, {
 const client = mqtt.connect('wss://mqtt.flespi.io:443',{username:'FlespiToken QGE7NyfGF3wfQDIaFbtlRbIAtNISsgmCRziAPBk6qcEbCKmE6Z4DnraLRnEKds8f'});
 client.on('connect',()=>{document.getElementById('connDot').style.background='#4caf50'; document.getElementById('connText').innerText='Connected';});
 client.subscribe('ttgo/all_sensors');
+// === Manual Pump1 Control ===
+const pump1OnBtn = document.getElementById("pump1OnBtn");
+const pump1OffBtn = document.getElementById("pump1OffBtn");
+
+function setPump1ButtonState(state) {
+  pump1OnBtn.classList.remove("active-on");
+  pump1OffBtn.classList.remove("active-off");
+
+  if (state === "ON") pump1OnBtn.classList.add("active-on");
+  if (state === "OFF") pump1OffBtn.classList.add("active-off");
+}
+
+pump1OnBtn.addEventListener("click", () => {
+  if (client.connected) {
+    client.publish("ttgo/relay1_control", "ON");
+    setPump1ButtonState("ON");
+    console.log("🟢 Pump1 ON sent");
+  } else {
+    alert("MQTT not connected");
+  }
+});
+
+pump1OffBtn.addEventListener("click", () => {
+  if (client.connected) {
+    client.publish("ttgo/relay1_control", "OFF");
+    setPump1ButtonState("OFF");
+    console.log("🔴 Pump1 OFF sent");
+  } else {
+    alert("MQTT not connected");
+  }
+});
 
 // Array to store rows for export
 const storedRows=[];
