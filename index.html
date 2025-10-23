@@ -247,41 +247,15 @@ canvas { display:block; }
 </section>
 
 <script>
-  // === Restore saved schedule ===
+  // === Elements ===
   const fertDay = document.getElementById("fertDay");
   const fertTime = document.getElementById("fertTime");
   const fertDuration = document.getElementById("fertDuration");
   const countdownEl = document.getElementById("nextFertCountdown");
+  const saveBtn = document.getElementById("saveFertSchedule");
 
-  // Load saved schedule from localStorage
-  const saved = JSON.parse(localStorage.getItem("fertilizerSchedule")) || {};
-  if (saved.day) fertDay.value = saved.day;
-  if (saved.time) fertTime.value = saved.time;
-  if (saved.duration) fertDuration.value = saved.duration;
-
-  // Function to publish schedule to MQTT
-  function publishSchedule(schedule) {
-    if (window.client && client.connected) {
-      client.publish("ttgo/fertilizer_schedule", JSON.stringify(schedule));
-      console.log("📡 Published schedule to ESP32:", schedule);
-    } else {
-      console.warn("⚠️ MQTT not connected. Schedule will resend on reconnect.");
-      // Store temporarily to resend after reconnect
-      window.pendingSchedule = schedule;
-    }
-  }
-
-  // === Save schedule + publish ===
-  document.getElementById("saveFertSchedule").addEventListener("click", () => {
-    const schedule = {
-      day: fertDay.value,
-      time: fertTime.value,
-      duration: fertDuration.value
-    };
-    localStorage.setItem("fertilizerSchedule", JSON.stringify(schedule));
-    publishSchedule(schedule);
-    updateCountdown();
-  });
+  // === Local storage fallback ===
+  let saved = JSON.parse(localStorage.getItem("fertilizerSchedule")) || {};
 
   // === Countdown updater ===
   function updateCountdown() {
@@ -311,29 +285,73 @@ canvas { display:block; }
 
     countdownEl.textContent = `Next fertilization in: ${d}d ${h}h ${m}m`;
   }
-
-  // Auto-update every minute
   updateCountdown();
   setInterval(updateCountdown, 60000);
 
-  // === Re-publish schedule automatically after refresh ===
-  window.addEventListener("load", () => {
-    if (saved.day && saved.time && saved.duration) {
-      publishSchedule(saved);
-      updateCountdown();
+  // === Function to publish schedule ===
+  function publishSchedule(schedule) {
+    if (client.connected) {
+      client.publish("ttgo/fertilizer_schedule", JSON.stringify(schedule));
+      console.log("📡 Published schedule:", schedule);
+    } else {
+      window.pendingSchedule = schedule;
+      console.warn("⚠️ MQTT not connected. Schedule will send on reconnect.");
+    }
+  }
+
+  // === Save button ===
+  saveBtn.addEventListener("click", () => {
+    const schedule = {
+      day: fertDay.value,
+      time: fertTime.value,
+      duration: fertDuration.value
+    };
+    localStorage.setItem("fertilizerSchedule", JSON.stringify(schedule));
+    publishSchedule(schedule);
+    updateCountdown();
+  });
+
+  // === Receive schedule from MQTT ===
+  client.subscribe("ttgo/fertilizer_schedule");
+  client.on("message", (topic, msg) => {
+    if (topic === "ttgo/fertilizer_schedule") {
+      try {
+        const schedule = JSON.parse(msg.toString());
+        fertDay.value = schedule.day;
+        fertTime.value = schedule.time;
+        fertDuration.value = schedule.duration;
+        updateCountdown();
+
+        // Save to localStorage for offline fallback
+        localStorage.setItem("fertilizerSchedule", JSON.stringify(schedule));
+        console.log("📡 Schedule received from MQTT:", schedule);
+      } catch(e) { console.error(e); }
     }
   });
 
-  // === Re-publish after MQTT reconnect ===
-  if (window.client) {
-    client.on("connect", () => {
-      if (window.pendingSchedule) {
-        publishSchedule(window.pendingSchedule);
-        window.pendingSchedule = null;
-      } else if (saved.day && saved.time) {
-        publishSchedule(saved);
-      }
-    });
+  // === Republish after MQTT reconnect ===
+  client.on("connect", () => {
+    document.getElementById('connDot').style.background='#4caf50';
+    document.getElementById('connText').innerText='Connected';
+
+    if (window.pendingSchedule) {
+      publishSchedule(window.pendingSchedule);
+      window.pendingSchedule = null;
+    } else if (fertDay.value && fertTime.value) {
+      publishSchedule({
+        day: fertDay.value,
+        time: fertTime.value,
+        duration: fertDuration.value
+      });
+    }
+  });
+
+  // === On page load, restore local schedule ===
+  if (saved.day && saved.time && saved.duration) {
+    fertDay.value = saved.day;
+    fertTime.value = saved.time;
+    fertDuration.value = saved.duration;
+    updateCountdown();
   }
 </script>
 
