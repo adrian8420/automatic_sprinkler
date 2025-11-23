@@ -232,16 +232,26 @@ canvas { display:block; }
 </div>
 
 <section class="status-row">
- <div class="pump-box">
-  <div class="pump-label">Pump1</div>
-  <div id="relay1Badge" class="pump-badge muted">—</div>
-  <div class="small-muted">Control: automatic Irrigation</div>
-  <div style="margin-top:10px; display:flex; gap:8px; justify-content:center;">
-    <button id="pump1OnBtn" class="pump-btn">ON</button>
-    <button id="pump1OffBtn" class="pump-btn">OFF</button>
+  <!-- Pump1 Controls -->
+  <div class="pump-box">
+    <div class="pump-label">Pump1</div>
+    <div id="relay1Badge" class="pump-badge muted">—</div>
+    <div class="small-muted">Control: automatic Irrigation</div>
+    <div style="margin-top:10px; display:flex; gap:8px; justify-content:center;">
+      <button id="pump1OnBtn" class="pump-btn">ON</button>
+      <button id="pump1OffBtn" class="pump-btn">OFF</button>
+    </div>
   </div>
-</div>
-  <div class="pump-box"><div class="pump-label">Pump2</div><div id="relay2Badge" class="pump-badge muted">—</div><div class="small-muted">Control: automatic Fertilizing</div></div>
+  <!-- Pump2 Controls -->
+  <div class="pump-box">
+    <div class="pump-label">Pump2</div>
+    <div id="relay2Badge" class="pump-badge muted">—</div>
+    <div class="small-muted">Control: automatic Fertilizing</div>
+    <div style="margin-top:10px; display:flex; gap:8px; justify-content:center;">
+      <button id="pump2OnBtn" class="pump-btn">ON</button>
+      <button id="pump2OffBtn" class="pump-btn">OFF</button>
+    </div>
+  </div>
 </section>
 
 <section class="card" id="fertilizerSchedule" style="text-align:center;">
@@ -336,6 +346,62 @@ client.subscribe('ttgo/all_sensors');
 client.subscribe('ttgo/fertilizer_schedule/state', { qos: 1 });
 client.subscribe('ttgo/notifications');
 
+// === Manual Pump1 Control ===
+const pump1OnBtn = document.getElementById("pump1OnBtn");
+const pump1OffBtn = document.getElementById("pump1OffBtn");
+function setPump1ButtonState(state) {
+  pump1OnBtn.classList.remove("active-on");
+  pump1OffBtn.classList.remove("active-off");
+  if (state === "ON") pump1OnBtn.classList.add("active-on");
+  if (state === "OFF") pump1OffBtn.classList.add("active-off");
+}
+pump1OnBtn.addEventListener("click", () => {
+  if (client.connected) {
+    client.publish("ttgo/relay1_control", "ON");
+    setPump1ButtonState("ON");
+    console.log("🟢 Pump1 ON sent");
+  } else {
+    alert("MQTT not connected");
+  }
+});
+pump1OffBtn.addEventListener("click", () => {
+  if (client.connected) {
+    client.publish("ttgo/relay1_control", "OFF");
+    setPump1ButtonState("OFF");
+    console.log("🔴 Pump1 OFF sent");
+  } else {
+    alert("MQTT not connected");
+  }
+});
+
+// === Manual Pump2 Control ===
+const pump2OnBtn = document.getElementById("pump2OnBtn");
+const pump2OffBtn = document.getElementById("pump2OffBtn");
+function setPump2ButtonState(state) {
+  pump2OnBtn.classList.remove("active-on");
+  pump2OffBtn.classList.remove("active-off");
+  if (state === "ON") pump2OnBtn.classList.add("active-on");
+  if (state === "OFF") pump2OffBtn.classList.add("active-off");
+}
+pump2OnBtn.addEventListener("click", () => {
+  if (client.connected) {
+    client.publish("ttgo/relay2_control", "ON");
+    setPump2ButtonState("ON");
+    console.log("🟢 Pump2 ON sent");
+  } else {
+    alert("MQTT not connected");
+  }
+});
+pump2OffBtn.addEventListener("click", () => {
+  if (client.connected) {
+    client.publish("ttgo/relay2_control", "OFF");
+    setPump2ButtonState("OFF");
+    console.log("🔴 Pump2 OFF sent");
+  } else {
+    alert("MQTT not connected");
+  }
+});
+
 client.on('message',function(topic,msg){
   if(topic==="ttgo/notifications"){
     try {
@@ -403,15 +469,19 @@ client.on('message',function(topic,msg){
     let relay2Badge = document.getElementById('relay2Badge');
     if (typeof d.relay1 === "undefined" || d.relay1 === null || d.relay1 === "") {
       relay1Badge.className = 'pump-badge muted'; relay1Badge.innerText = '—';
+      setPump1ButtonState(""); // remove states
     } else {
       const relay1On = d.relay1 === "ON";
       relay1Badge.className = 'pump-badge ' + (relay1On ? 'ok' : 'bad'); relay1Badge.innerText = relay1On ? 'ON' : 'OFF';
+      setPump1ButtonState(relay1On ? "ON" : "OFF");
     }
     if (typeof d.relay2 === "undefined" || d.relay2 === null || d.relay2 === "") {
       relay2Badge.className = 'pump-badge muted'; relay2Badge.innerText = '—';
+      setPump2ButtonState(""); // remove states
     } else {
       const relay2Fertilizing = d.relay2 === "Fertilizing";
       relay2Badge.className = 'pump-badge ' + (relay2Fertilizing ? 'ok' : 'bad'); relay2Badge.innerText = relay2Fertilizing ? 'Fertilizing' : 'Waiting';
+      setPump2ButtonState(relay2Fertilizing ? "ON" : "OFF");
     }
     // Export data
     storedRows.push([
