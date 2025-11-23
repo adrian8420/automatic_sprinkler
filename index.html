@@ -242,13 +242,12 @@ canvas { display:block; }
       <button id="pump1OffBtn" class="pump-btn">OFF</button>
     </div>
   </div>
-  <!-- Pump2 Controls -->
+  <!-- Pump2 (badge only, manual buttons removed) -->
   <div class="pump-box">
     <div class="pump-label">Pump2</div>
     <div id="relay2Badge" class="pump-badge muted">—</div>
     <div class="small-muted">Control: automatic Fertilizing</div>
-    <div style="margin-top:10px; display:flex; gap:8px; justify-content:center;">
-    </div>
+    <!-- Manual control buttons removed per request; only badge remains -->
   </div>
 </section>
 
@@ -372,33 +371,7 @@ pump1OffBtn.addEventListener("click", () => {
   }
 });
 
-// === Manual Pump2 Control ===
-const pump2OnBtn = document.getElementById("pump2OnBtn");
-const pump2OffBtn = document.getElementById("pump2OffBtn");
-function setPump2ButtonState(state) {
-  pump2OnBtn.classList.remove("active-on");
-  pump2OffBtn.classList.remove("active-off");
-  if (state === "ON") pump2OnBtn.classList.add("active-on");
-  if (state === "OFF") pump2OffBtn.classList.add("active-off");
-}
-pump2OnBtn.addEventListener("click", () => {
-  if (client.connected) {
-    client.publish("ttgo/relay2_control", "ON");
-    setPump2ButtonState("ON");
-    console.log("🟢 Pump2 ON sent");
-  } else {
-    alert("MQTT not connected");
-  }
-});
-pump2OffBtn.addEventListener("click", () => {
-  if (client.connected) {
-    client.publish("ttgo/relay2_control", "OFF");
-    setPump2ButtonState("OFF");
-    console.log("🔴 Pump2 OFF sent");
-  } else {
-    alert("MQTT not connected");
-  }
-});
+// Note: Manual controls for Pump2 have been removed — only the badge (relay2Badge) remains visible in the UI.
 
 client.on('message',function(topic,msg){
   if(topic==="ttgo/notifications"){
@@ -467,20 +440,20 @@ client.on('message',function(topic,msg){
     let relay2Badge = document.getElementById('relay2Badge');
     if (typeof d.relay1 === "undefined" || d.relay1 === null || d.relay1 === "") {
       relay1Badge.className = 'pump-badge muted'; relay1Badge.innerText = '—';
-      setPump1ButtonState(""); // remove states
+      setPump1ButtonState(""); // remove states for pump1 buttons
     } else {
       const relay1On = d.relay1 === "ON";
       relay1Badge.className = 'pump-badge ' + (relay1On ? 'ok' : 'bad'); relay1Badge.innerText = relay1On ? 'ON' : 'OFF';
       setPump1ButtonState(relay1On ? "ON" : "OFF");
     }
+    // Pump2: badge only (no manual buttons)
     if (typeof d.relay2 === "undefined" || d.relay2 === null || d.relay2 === "") {
       relay2Badge.className = 'pump-badge muted'; relay2Badge.innerText = '—';
-      setPump2ButtonState(""); // remove states
     } else {
       const relay2Fertilizing = d.relay2 === "Fertilizing";
       relay2Badge.className = 'pump-badge ' + (relay2Fertilizing ? 'ok' : 'bad'); relay2Badge.innerText = relay2Fertilizing ? 'Fertilizing' : 'Waiting';
-      setPump2ButtonState(relay2Fertilizing ? "ON" : "OFF");
     }
+
     // Export data
     storedRows.push([
       new Date().toLocaleString(),
@@ -568,7 +541,9 @@ const chartWaterCtx = document.getElementById('chartWater').getContext('2d');
 const chartWater = new Chart(chartWaterCtx,{type:'line',data:{labels:[],datasets:[{label:'Water cm',data:[],borderColor:'#1976d2',backgroundColor:'rgba(25,118,210,0.1)',fill:true}]},options:{scales:{x:{display:false},y:{min:0,max:MAX_WATER_CM}},plugins:{legend:{display:false}}}});
 const chartFertCtx = document.getElementById('chartFert').getContext('2d');
 const chartFert = new Chart(chartFertCtx,{type:'line',data:{labels:[],datasets:[{label:'Fert cm',data:[],borderColor:'#fb8c00',backgroundColor:'rgba(251,140,0,0.1)',fill:true}]},options:{scales:{x:{display:false},y:{min:0,max:MAX_FERT_CM}},plugins:{legend:{display:false}}}});
+
+// Stored rows for export
+const storedRows = [];
 </script>
 </body>
 </html>
-
