@@ -1,15 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>🌾 Smart Farming Dashboard</title>
-
-<script src="https://cdn.jsdelivr.net/npm/mqtt/dist/mqtt.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
-
-<style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>🌾 Smart Farming Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/mqtt/dist/mqtt.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+  <style>
 :root{
   --bg:#f6fbf6;
   --card:#ffffff;
@@ -51,7 +49,6 @@ header{
 .title-wrap { display:flex; flex-direction:column; }
 h1 { font-size:18px; margin:0; }
 .subtitle { font-size:12px; color:var(--muted); margin-top:4px; }
-
 .conn {
   display:flex;
   gap:10px;
@@ -60,7 +57,6 @@ h1 { font-size:18px; margin:0; }
   color:var(--muted);
 }
 .conn .dot { width:12px; height:12px; border-radius:50%; display:inline-block; margin-right:6px; }
-
 .notif-bell {
   position: relative;
   display: flex;
@@ -71,39 +67,65 @@ h1 { font-size:18px; margin:0; }
 }
 .notif-bell:hover { transform: scale(1.13); }
 .notif-bell svg { width:28px; height:28px; fill:#0b84d4; }
-.notif-dot {
+.notif-count {
   position: absolute;
-  top: 2px;
-  right: 4px;
-  width:10px;
-  height:10px;
-  background: var(--danger);
-  border-radius:50%;
-  border: 2px solid #fff;
+  top: -6px;
+  right: -4px;
+  min-width:18px;
+  height:18px;
+  padding:0 5px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:12px;
+  color:#fff;
+  background:var(--danger);
+  border-radius:12px;
+  border:2px solid #fff;
+  box-shadow:0 1px 3px rgba(0,0,0,0.12);
   pointer-events:none;
-  display: none;
+  display:none;
+  z-index:30;
 }
-.notif-bell.active .notif-dot { display: block; }
 .notif-panel {
   position: absolute;
   right: 18px;
   top: 70px;
-  min-width: 280px;
-  max-width: 350px;
+  min-width: 300px;
+  max-width: 420px;
   background: #fff;
   box-shadow: 0 8px 24px rgba(10,30,20,0.11);
   border-radius: 10px;
   z-index: 20;
-  padding: 10px 22px 10px 14px;
+  padding: 8px;
   font-size: 15px;
   display: none;
 }
 .notif-panel.active { display: block; }
 .notif-panel .notif-item {
-  display: flex; flex-direction: column; padding: 8px 0; border-bottom: 1px solid #eef9ef;
+  display: flex; flex-direction: row; align-items: center; justify-content: space-between;
+  gap:10px;
+  padding: 10px 8px; border-bottom: 1px solid #eef9ef;
 }
-.notif-panel .notif-item:last-child { border-bottom: none; }
-.notif-panel .notif-time { font-size: 13px; color: #8a8a8a; }
+.notif-panel .notif-item .left {
+  display:flex; flex-direction:column; gap:6px; max-width: calc(100% - 70px);
+}
+.notif-panel .notif-item .time { color:var(--muted); font-size:12px; }
+.notif-panel .delete-btn {
+  background: transparent;
+  border: none;
+  color: var(--danger);
+  padding:6px 8px;
+  border-radius:8px;
+  cursor:pointer;
+  font-weight:700;
+}
+.notif-panel .topbar {
+  display:flex; justify-content:space-between; align-items:center; padding:6px 8px 8px 8px;
+}
+.notif-panel .clear-all {
+  background:#eee; border:none; padding:6px 10px; border-radius:8px; cursor:pointer; font-weight:700;
+}
 .grid{
   max-width:var(--maxwidth);
   margin:18px auto;
@@ -113,21 +135,28 @@ h1 { font-size:18px; margin:0; }
   grid-template-columns: repeat(4, 1fr);
 }
 .pump-btn {
-    background: #fff;
-    color: #333;
-    border: 2px solid #ccc;
-    border-radius: 8px;
-    padding: 6px 14px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s ease;
-  }
+  background: #fff;
+  color: #333;
+  border: 2px solid #ccc;
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
 .pump-btn:hover { border-color: #999; }
 .pump-btn.active-on {
-    background: #4caf50; color: #fff; border-color: #4caf50;
+  background: #4caf50; color: #fff; border-color: #4caf50;
 }
 .pump-btn.active-off {
-    background: #e53935; color: #fff; border-color: #e53935;
+  background: #e53935; color: #fff; border-color: #e53935;
+}
+.pump-btn[disabled] {
+  color: #bbb !important;
+  border-color: #eee !important;
+  background: #f6f6f6 !important;
+  cursor: not-allowed !important;
+  opacity: 0.55;
 }
 @media (max-width:1100px){ .grid { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width:640px){
@@ -159,19 +188,116 @@ h1 { font-size:18px; margin:0; }
 .export-wrap { max-width:var(--maxwidth); margin:6px auto 48px; padding:8px 14px; text-align:center; }
 .export-btn { padding:10px 16px; border-radius:10px; background:var(--accent-2); color:#fff; border:none; font-weight:800; cursor:pointer; }
 .export-btn:active { transform: translateY(1px); }
+.export-btn[disabled] {
+  background: #999 !important;
+  color: #ddd !important;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
 .badge { display:inline-block; padding:6px 10px; border-radius:8px; color:#fff; font-weight:700; }
 .muted { background:var(--muted); }
 .ok { background:var(--accent-2); }
 .bad { background:var(--danger); }
 .small-muted { color:var(--muted); font-size:13px; margin-top:6px; }
 canvas { display:block; }
-</style>
+#userRoleBanner {
+  margin: 10px auto 0 auto !important;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: #0b84d4;
+  color:#fff;
+  font-size: 19px;
+  font-weight:700;
+  padding: 12px 28px 12px 22px;
+  border-radius: 24px;
+  box-shadow: 0 2px 14px rgba(10,30,20,0.08);
+  width: fit-content;
+  min-width: 260px;
+  max-width: 96vw;
+  letter-spacing: 0.5px;
+}
+#logoutBtn {
+  margin-left: 18px;
+  background: #e53935 !important;
+  color: #fff !important;
+  border: none !important;
+  padding: 7px 26px;
+  border-radius: 13px;
+  font-size: 19px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s;
+  box-shadow: 0 1px 5px rgba(0,0,0,0.07);
+}
+#logoutBtn:active { transform: translateY(1px);}
+#loginModal {
+  position: fixed; left: 0; top: 0; width: 100vw; height: 100vh; z-index: 100;
+  background: rgba(0,0,0,0.23);
+  display: flex; align-items: center; justify-content: center;
+}
+#loginContent {
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 9px 36px rgba(30,50,50,0.16);
+  padding: 30px 24px 20px;
+  text-align: center;
+  min-width: 320px;
+}
+#loginBox input {
+  margin: 8px 0; padding: 7px 11px; border-radius:7px; border:1px solid #bbb; width: 82%;
+  font-size: 15px;
+}
+#loginBox button, #userLoginBtn {
+  background: #0b84d4; color: #fff; border: none; border-radius: 7px; padding:8px 28px; font-size: 17px; font-weight: 700; margin-top: 16px; cursor: pointer;
+}
+#userLoginBtn { display:block; width:100%; margin-top:12px; }
+#loginBox button:active,#userLoginBtn:active { transform: translateY(2px);}
+#loginMsg { color:#e53935; font-size:13px; margin-top:10px; min-height:24px; }
+
+/* Minimize space between fertilizing, phone, and banner */
+.card + .card, .card + #userRoleBanner, #phoneSection + #userRoleBanner {
+  margin-top: 10px !important;
+}
+#phoneSection { margin-bottom: 0 !important; }
+#fertilizerSchedule { margin-bottom: 0 !important; }
+#userRoleBanner { margin-top: 10px !important; margin-bottom: 0 !important; }
+
+/* Make sure small screens stack nicely */
+@media (max-width:720px) {
+  .controls-row .card, .controls-row #fertilizerSchedule, .controls-row #phoneSection {
+    flex: 1 1 100%;
+  }
+  .bottom-row { gap:10px; justify-content:center; text-align:center; }
+  .bottom-row .export-wrap { order:2; width:100%; }
+  .bottom-row #userRoleBanner { order:1; width:100%; justify-content:center; }
+}
+  </style>
 </head>
 <body>
 
+<!-- Login Modal: Allows Admin login or User direct entry -->
+<div id="loginModal">
+  <div id="loginContent">
+    <form id="loginBox" autocomplete="off" style="margin-bottom:0;">
+      <h2>Admin Login</h2>
+      <input id="usernameInput" type="text" placeholder="Username" autocomplete="username" required />
+      <input id="passwordInput" type="password" placeholder="Password" autocomplete="current-password" required />
+      <button type="submit">Login</button>
+      <div id="loginMsg"></div>
+      <div style="margin:10px 0 14px 0; color:#888; font-size:12px;">
+        admin / adminpass
+      </div>
+    </form>
+    <hr style="margin:12px 0 15px 0; border:none; border-top:1.5px solid #f0f0f0; width:83%;">
+    <div style="font-size: 15px; color:#666;">or</div>
+    <button id="userLoginBtn" type="button">User Login (View Only)</button>
+  </div>
+</div>
+
 <header>
   <div class="header-left">
-    <div class="logo">
+    <div class="logo" aria-hidden="true">
       <svg width="40" height="40" viewBox="0 0 24 24" fill="none">
         <path d="M12 2C9.8 2 8 3.8 8 6c0 1.5.8 2.8 2 3.5V11l-2 4h8l-2-4V9.5c1.2-.7 2-2 2-3.5 0-2.2-1.8-4-4-4z" fill="#4CAF50"/>
         <path d="M3 20c0-4 4-8 9-8s9 4 9 8H3z" fill="#2E7D32"/>
@@ -187,11 +313,13 @@ canvas { display:block; }
       <span class="dot" id="connDot" style="background:#e53935;"></span>
       <span id="connText">Disconnected</span>
     </div>
-    <div class="notif-bell" id="notifBell" title="Notifications">
-      <svg viewBox="0 0 24 24"><path d="M12 22c1.1 0 2-.9 2-2h-4a2 2 0 002 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4a1.5 1.5 0 10-3 0v.68C7.63 5.36 6 7.92 6 11v5l-1.29 1.29A1 1 0 006 20h12a1 1 0 00.29-1.71L18 16zM8 16v-5c0-2.48 1.51-4.5 4-4.5s4 2.02 4 4.5v5H8z"/></svg>
-      <span class="notif-dot" id="notifDot"></span>
+
+    <div class="notif-bell" id="notifBell" title="Notifications" aria-haspopup="true" aria-controls="notifPanel" role="button">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22c1.1 0 2-.9 2-2h-4a2 2 0 002 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4a1.5 1.5 0 10-3 0v.68C7.63 5.36 6 7.92 6 11v5l-1.29 1.29A1 1 0 006 20h12a1 1 0 00.29-1.71L18 16zM8 16v-5c0-2.48 1.51-4.5 4-4.5s4 2.02 4 4.5v5H8z"/></svg>
+      <div id="notifCount" class="notif-count" aria-hidden="true">0</div>
     </div>
-    <div class="notif-panel" id="notifPanel" role="alert"></div>
+
+    <div class="notif-panel" id="notifPanel" role="alert" aria-live="polite"></div>
   </div>
 </header>
 
@@ -232,7 +360,6 @@ canvas { display:block; }
 </div>
 
 <section class="status-row">
-  <!-- Pump1 Controls -->
   <div class="pump-box">
     <div class="pump-label">Pump1</div>
     <div id="relay1Badge" class="pump-badge muted">—</div>
@@ -242,345 +369,597 @@ canvas { display:block; }
       <button id="pump1OffBtn" class="pump-btn">OFF</button>
     </div>
   </div>
-  <!-- Pump2 (badge only, manual buttons removed) -->
   <div class="pump-box">
     <div class="pump-label">Pump2</div>
     <div id="relay2Badge" class="pump-badge muted">—</div>
     <div class="small-muted">Control: automatic Fertilizing</div>
-    <!-- Manual control buttons removed per request; only badge remains -->
   </div>
 </section>
 
-<section class="card" id="fertilizerSchedule" style="text-align:center;">
-  <h3>🧪 Fertilizing Schedule Control</h3>
-  <div style="display:flex; flex-wrap:wrap; justify-content:center; align-items:center; gap:8px;">
-    <label>Day:
-      <select id="fertDay">
-        <option>Monday</option><option>Tuesday</option><option>Wednesday</option>
-        <option>Thursday</option><option>Friday</option><option>Saturday</option><option>Sunday</option>
-      </select>
-    </label>
-    <label>Time:
-      <input type="time" id="fertTime">
-    </label>
-    <label>Duration (min):
-      <input type="number" id="fertDuration" min="1" max="60" value="10" style="width:60px;">
-    </label>
-    <button id="saveFertSchedule" style="padding:6px 10px; background:#4caf50; color:#fff; border:none; border-radius:6px; cursor:pointer;">💾 Save</button>
-    <span id="nextFertCountdown" style="margin-left:10px; font-size:14px; color:gray;">
-      Next fertilization in: --
-    </span>
-  </div>
-</section>
+<!-- Controls row: schedule + phone -->
+<div class="controls-row" aria-label="Controls row">
+  <section class="card" id="fertilizerSchedule" style="text-align:center;">
+    <h3>🧪 Fertilizing Schedule Control</h3>
+    <div style="display:flex; flex-wrap:wrap; justify-content:center; align-items:center; gap:8px;">
+      <label>Day:
+        <select id="fertDay">
+          <option>Monday</option><option>Tuesday</option><option>Wednesday</option>
+          <option>Thursday</option><option>Friday</option><option>Saturday</option><option>Sunday</option>
+        </select>
+      </label>
+      <label>Time:
+        <input type="time" id="fertTime">
+      </label>
+      <label>Duration (min):
+        <input type="number" id="fertDuration" min="1" max="60" value="10" style="width:60px;">
+      </label>
+      <button id="saveFertSchedule" style="padding:6px 10px; background:#4caf50; color:#fff; border:none; border-radius:6px; cursor:pointer;">💾 Save</button>
+      <span id="nextFertCountdown" style="margin-left:10px; font-size:14px; color:gray;">
+        Next fertilization in: --
+      </span>
+    </div>
+  </section>
 
-<section class="export-wrap">
-  <button class="export-btn" id="exportBtn">📦 Export to Excel (.xlsx)</button>
-</section>
+  <section class="card" id="phoneSection" style="text-align:center;">
+    <h3>📱 Alert Phone Number</h3>
+    <form id="phoneForm" style="display:flex; flex-direction:row; gap:10px; justify-content:center; align-items:center;">
+      <input id="phoneInput" type="tel" placeholder="Enter phone number" style="padding:7px 11px; border-radius:7px; border:1px solid #bbb; font-size:15px; min-width:160px;" pattern="^(\+?\d{9,16})$" required />
+      <button id="savePhoneBtn" type="submit" style="padding:8px 26px; background:#0b84d4; color:#fff; border:none; border-radius:7px; font-size:15px; font-weight:700; cursor:pointer;">💾 Save</button>
+    </form>
+    <div id="phoneMsg" style="color:#e53935; font-size:14px; margin-top:8px; min-height:20px;"></div>
+    <div style="color:#666; font-size:14px; margin-top:10px;">Current phone: <span id="displayPhone" style="font-weight:700;">—</span></div>
+  </section>
+</div>
+
+<!-- User banner + export -->
+<div class="bottom-row" role="region" aria-label="User and export row">
+  <div id="userRoleBanner" style="display:none;">
+    <span id="curRole" style="font-weight:700;"></span>
+    <button id="logoutBtn" type="button">Logout</button>
+  </div>
+
+  <div class="export-wrap">
+    <button class="export-btn" id="exportBtn">📦 Export to Excel (.xlsx)</button>
+  </div>
+</div>
 
 <script>
-/* --------------------------
-   Notifications (localHistory)
-   -------------------------- */
-const LOCALSTORAGE_KEY = "notifHistory";
+/* -------------------------
+   Constants / Keys
+   ------------------------- */
+const ADMIN_CREDENTIALS = { username: "admin", password: "adminpass" };
+const LOCALSTORAGE_NOTIF = "notifHistory";
+const LOCALSTORAGE_UNREAD = "notifUnreadCount";
+const DAILY_NOTIF_KEY = "notifDailySentDates";
+const PHONE_KEY = "alertPhoneNumber";
+
+/* -------------------------
+   Helpers: daily suppression map
+   ------------------------- */
+function loadDailyNotifMap() {
+  try { return JSON.parse(localStorage.getItem(DAILY_NOTIF_KEY) || "{}"); } catch { return {}; }
+}
+function saveDailyNotifMap(map) {
+  try { localStorage.setItem(DAILY_NOTIF_KEY, JSON.stringify(map)); } catch {}
+}
+function hasNotifiedToday(type) {
+  const map = loadDailyNotifMap();
+  const today = new Date().toISOString().slice(0,10);
+  return map[type] === today;
+}
+function markNotifiedToday(type) {
+  const map = loadDailyNotifMap();
+  const today = new Date().toISOString().slice(0,10);
+  map[type] = today;
+  saveDailyNotifMap(map);
+}
+
+/* -------------------------
+   Role / Login UI
+   ------------------------- */
+let role = null; // "admin" or "user". null means not logged in.
+
+function setRole(newRole) {
+  role = newRole;
+  renderRoleUI();
+}
+
+function showLogin(){ document.getElementById("loginModal").style.display = "flex"; document.getElementById("loginMsg").textContent=""; document.getElementById("usernameInput").value=""; document.getElementById("passwordInput").value=""; }
+function hideLogin(){ document.getElementById("loginModal").style.display = "none"; }
+
+document.getElementById("loginBox").addEventListener("submit", function(e){
+  e.preventDefault();
+  const username = document.getElementById("usernameInput").value.trim();
+  const password = document.getElementById("passwordInput").value;
+  if(username === ADMIN_CREDENTIALS.username && password === ADMIN_CREDENTIALS.password) {
+    setRole("admin"); hideLogin();
+  } else {
+    document.getElementById("loginMsg").textContent = "Invalid username or password";
+  }
+});
+document.getElementById("userLoginBtn").onclick = function(){ setRole("user"); hideLogin(); };
+document.getElementById("logoutBtn").onclick = function(){ setRole(null); showLogin(); };
+
+/* -------------------------
+   Phone section
+   ------------------------- */
+const phoneInput = document.getElementById("phoneInput");
+const savePhoneBtn = document.getElementById("savePhoneBtn");
+const phoneForm = document.getElementById("phoneForm");
+const phoneMsg = document.getElementById("phoneMsg");
+const displayPhone = document.getElementById("displayPhone");
+
+function getStoredPhone(){ return localStorage.getItem(PHONE_KEY) || ""; }
+function setStoredPhone(num){ localStorage.setItem(PHONE_KEY, num); }
+function refreshPhoneDisplay(){ const val = getStoredPhone(); displayPhone.textContent = val ? val : "—"; phoneInput.value = val; }
+refreshPhoneDisplay();
+
+phoneForm.addEventListener("submit", function(e){
+  e.preventDefault();
+  if(role !== "admin") return;
+  const num = phoneInput.value.trim();
+  const re = /^\+?\d{9,16}$/;
+  if(!re.test(num)) { phoneMsg.textContent = "Invalid phone number format"; return; }
+  setStoredPhone(num);
+  phoneMsg.textContent = "Phone updated!";
+  refreshPhoneDisplay();
+  setTimeout(()=>{ phoneMsg.textContent=""; }, 1800);
+});
+
+function renderPhoneUI(){
+  if(role !== "admin"){
+    phoneInput.disabled = true; savePhoneBtn.disabled = true; savePhoneBtn.title="Only admin can update"; phoneInput.title="Only admin can edit";
+    phoneForm.style.pointerEvents = "none"; phoneInput.style.backgroundColor = "#f6f6f6"; phoneMsg.textContent = "";
+  } else {
+    phoneInput.disabled = false; savePhoneBtn.disabled = false; savePhoneBtn.title=""; phoneInput.title="";
+    phoneForm.style.pointerEvents = ""; phoneInput.style.backgroundColor = "";
+  }
+  refreshPhoneDisplay();
+}
+
+/* -------------------------
+   Notifications (history + unread count + badge + delete)
+   ------------------------- */
+
 function getNotifHistory() {
-  try { return JSON.parse(localStorage.getItem(LOCALSTORAGE_KEY) || "[]"); }
-  catch { return []; }
+  try { return JSON.parse(localStorage.getItem(LOCALSTORAGE_NOTIF) || "[]"); } catch { return []; }
 }
-function saveNotifHistory(list) {
-  localStorage.setItem(LOCALSTORAGE_KEY, JSON.stringify(list));
+function saveNotifHistory(list) { localStorage.setItem(LOCALSTORAGE_NOTIF, JSON.stringify(list)); }
+
+function getUnreadCount(){ return Number(localStorage.getItem(LOCALSTORAGE_UNREAD) || "0"); }
+function setUnreadCount(n){ localStorage.setItem(LOCALSTORAGE_UNREAD, String(Math.max(0, Number(n)))); updateNotifBadge(); }
+
+const notifBell = document.getElementById("notifBell");
+const notifPanel = document.getElementById("notifPanel");
+const notifCountEl = document.getElementById("notifCount");
+let panelShown = false;
+let notifList = [];
+
+function updateNotifBadge(){
+  const count = getUnreadCount();
+  if(count > 0){
+    notifCountEl.style.display = "flex";
+    notifCountEl.textContent = count > 99 ? "99+" : String(count);
+    notifBell.setAttribute("aria-label", `Notifications (${count})`);
+  } else {
+    notifCountEl.style.display = "none";
+    notifBell.setAttribute("aria-label", "Notifications");
+  }
 }
+
+/* Render notification panel with delete buttons and "Clear All" */
+function updateNotifDisplay(){
+  notifList = getNotifHistory();
+  if (notifList.length > 0) {
+    // topbar with Clear All
+    let html = `<div class="topbar"><strong>Notifications</strong><button id="clearAllBtn" class="clear-all">Clear All</button></div>`;
+    // render newest first
+    for(let i = notifList.length - 1; i >= 0; i--) {
+      const n = notifList[i];
+      const safeType = escapeHtml(n.type || 'Notification');
+      const safeDetail = n.detail ? ` — ${escapeHtml(n.detail)}` : '';
+      const safeTime = escapeHtml(n.time || '');
+      // store data-index as original index i
+      html += `<div class="notif-item" data-index="${i}">
+                 <div class="left">
+                   <div><strong>${safeType}</strong>${safeDetail}</div>
+                   <div class="time">${safeTime}</div>
+                 </div>
+                 <div>
+                   <button class="delete-btn" data-index="${i}" aria-label="Delete notification">Delete</button>
+                 </div>
+               </div>`;
+    }
+    notifPanel.innerHTML = html;
+
+    // attach handlers: delegated click for delete & clear-all
+    const clearAllBtn = document.getElementById('clearAllBtn');
+    if (clearAllBtn) {
+      clearAllBtn.onclick = () => {
+        if(!confirm('Clear all notifications?')) return;
+        clearAllNotifications();
+      };
+    }
+
+    // delete buttons - use event delegation instead of per-button to be safe
+    notifPanel.querySelectorAll('.delete-btn').forEach(btn => {
+      btn.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        const idx = Number(btn.getAttribute('data-index'));
+        deleteNotificationAt(idx);
+      });
+    });
+
+  } else {
+    notifPanel.innerHTML = '<div style="color:#aaa;padding:20px 0;text-align:center;">No notifications.</div>';
+  }
+}
+
+/* safe simple html escape */
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g, function(m){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"})[m]; }); }
+
+/* add to history (no unread increment here) */
 function addNotifToHistory(type, time, detail) {
   let list = getNotifHistory();
   list.push({ type, time, detail });
-  if (list.length > 100) list = list.slice(list.length - 100);
+  if (list.length > 200) list = list.slice(list.length - 200);
   saveNotifHistory(list);
   return list;
 }
-function updateNotifDisplay() {
-  if (notifList.length > 0) {
-    notifPanel.innerHTML = notifList.map(n =>
-      `<div class="notif-item">
-        <span>${n.type}${n.detail ? `: ${n.detail}` : ""}</span>
-        <span class="notif-time">${n.time}</span>
-      </div>`
-    ).reverse().join('');
-    notifBell.classList.add("active");
-    notifDot.style.display = "block";
-  } else {
-    notifPanel.innerHTML = '<div style="color:#aaa;padding:20px 0;text-align:center;">No notifications.</div>';
-    notifBell.classList.remove("active");
-    notifDot.style.display = "none";
+
+/*
+ Modified notify:
+ - opts.daily (default true): enable daily suppression per type
+ - opts.force (default false): bypass suppression and always notify
+*/
+function notify(type, time, detail, opts = { daily: true, force: false }) {
+  try {
+    const doDaily = (opts.daily !== false);
+    const force = !!opts.force;
+
+    if (doDaily && !force) {
+      if (hasNotifiedToday(type)) {
+        // already sent today for this type -> skip adding again
+        console.debug(`Notification skipped (already sent today): ${type}`);
+        return;
+      }
+      // mark now so that concurrent calls won't duplicate
+      markNotifiedToday(type);
+    }
+
+    // add to history
+    addNotifToHistory(type, time, detail);
+    // increment unread
+    const newCount = getUnreadCount() + 1;
+    setUnreadCount(newCount);
+    // update panel UI
+    updateNotifDisplay();
+  } catch (err) {
+    console.error("notify() failed", err);
   }
 }
-let panelShown = false;
-const notifBell = document.getElementById("notifBell");
-const notifDot = document.getElementById("notifDot");
-const notifPanel = document.getElementById("notifPanel");
-notifBell.addEventListener("click", () => {
+
+/* Delete a specific notification by original index */
+function deleteNotificationAt(index) {
+  try {
+    let list = getNotifHistory();
+    if (index < 0 || index >= list.length) return;
+    list.splice(index, 1);
+    saveNotifHistory(list);
+    // If panel is shown, keep it shown and update display
+    updateNotifDisplay();
+    // unread count stays same (panel open clears it). If you prefer adjusting unread, implement logic here.
+  } catch (e) { console.error(e); }
+}
+
+/* Clear all notifications */
+function clearAllNotifications() {
+  try {
+    localStorage.setItem(LOCALSTORAGE_NOTIF, JSON.stringify([]));
+    setUnreadCount(0);
+    updateNotifDisplay();
+  } catch(e) { console.error(e); }
+}
+
+/* Clicking the bell toggles panel; when opening clear unread count */
+notifBell.addEventListener("click", (e)=>{
   panelShown = !panelShown;
   notifPanel.classList.toggle("active", panelShown);
+  if(panelShown){
+    // clear unread count when user opens / clicks
+    setUnreadCount(0);
+  }
 });
-document.addEventListener("click", e => {
-  if (!notifBell.contains(e.target) && !notifPanel.contains(e.target)) {
+/* close panel when clicking outside */
+document.addEventListener("click", e=>{
+  if(!notifBell.contains(e.target) && !notifPanel.contains(e.target)){
     notifPanel.classList.remove("active");
     panelShown = false;
   }
 });
-function notify(type, time, detail) {
-  let list = addNotifToHistory(type, time, detail);
-  notifList = list;
-  updateNotifDisplay();
-}
-let notifList = [];
-window.addEventListener("DOMContentLoaded", () => {
+
+/* initialize notification UI on DOMContentLoaded */
+window.addEventListener("DOMContentLoaded", ()=>{
   notifList = getNotifHistory();
   updateNotifDisplay();
+  updateNotifBadge();
 });
 
-/* --------------------------
-   MQTT connection & setup
-   -------------------------- */
+/* -------------------------
+   Latest Schedule toast/pill
+   ------------------------- */
+const latestScheduleToast = document.getElementById("latestScheduleToast");
+let latestSchedule = null;
+
+function showLatestScheduleToast(schedule, opts={autoHide: true, timeout:6000}) {
+  latestSchedule = schedule;
+  const txt = `Latest Schedule — Day: ${schedule.day || '-'} · Time: ${schedule.time || '-'} · Dur: ${schedule.duration || '-'}m`;
+  latestScheduleToast.innerHTML = `<span>${escapeHtml(txt)}</span> <button class="closeBtn" aria-label="Close latest schedule">✕</button>`;
+  latestScheduleToast.style.display = "block";
+  const closeBtn = latestScheduleToast.querySelector(".closeBtn");
+  closeBtn.onclick = ()=> { latestScheduleToast.style.display = "none"; };
+  if(opts.autoHide){
+    clearTimeout(latestScheduleToast._hideTimer);
+    latestScheduleToast._hideTimer = setTimeout(()=>{ latestScheduleToast.style.display = "none"; }, opts.timeout);
+  }
+}
+
+/* -------------------------
+   MQTT, Charts, Gauges, Data storage
+   ------------------------- */
 const client = mqtt.connect('wss://mqtt.flespi.io:443',{username:'FlespiToken QGE7NyfGF3wfQDIaFbtlRbIAtNISsgmCRziAPBk6qcEbCKmE6Z4DnraLRnEKds8f'});
-client.on('connect',()=>{
+
+/* state-tracking for pumps to notify only on changes */
+let lastRelay1State = null;
+let lastRelay2State = null;
+
+client.on('connect', ()=>{
   document.getElementById('connDot').style.background='#4caf50';
   document.getElementById('connText').innerText='Connected';
 
-  // on connect, if pending schedule exists, publish it
   if (window.pendingSchedule) {
     client.publish("ttgo/fertilizer_schedule", JSON.stringify(window.pendingSchedule));
+    try { notify('Schedule Published', new Date().toLocaleString(), JSON.stringify(window.pendingSchedule)); } catch(e){console.error(e);}
+    try{
+      const ps = window.pendingSchedule;
+      showLatestScheduleToast({day:ps.day, time:ps.time, duration:ps.duration});
+    }catch(e){}
     window.pendingSchedule = null;
   } else if (fertDay && fertTime && fertDuration && fertDay.value && fertTime.value) {
-    client.publish("ttgo/fertilizer_schedule", JSON.stringify({
-      day: fertDay.value,
-      time: fertTime.value,
-      duration: fertDuration.value
-    }));
+    const sch = { day: fertDay.value, time: fertTime.value, duration: fertDuration.value };
+    client.publish("ttgo/fertilizer_schedule", JSON.stringify(sch));
+    try { notify('Schedule Published', new Date().toLocaleString(), `Day:${sch.day} Time:${sch.time} Dur:${sch.duration}m`); } catch(e){console.error(e);}
+    showLatestScheduleToast(sch);
   }
 });
+
 client.subscribe('ttgo/all_sensors');
 client.subscribe('ttgo/fertilizer_schedule/state', { qos: 1 });
 client.subscribe('ttgo/notifications');
 
-/* === Manual Pump1 Control === */
+/* --- Pump controls --- */
 const pump1OnBtn = document.getElementById("pump1OnBtn");
 const pump1OffBtn = document.getElementById("pump1OffBtn");
-function setPump1ButtonState(state) {
-  pump1OnBtn.classList.remove("active-on");
-  pump1OffBtn.classList.remove("active-off");
-  if (state === "ON") pump1OnBtn.classList.add("active-on");
-  if (state === "OFF") pump1OffBtn.classList.add("active-off");
-}
-pump1OnBtn.addEventListener("click", () => {
-  if (client.connected) {
-    client.publish("ttgo/relay1_control", "ON");
-    setPump1ButtonState("ON");
-    console.log("🟢 Pump1 ON sent");
-  } else {
-    alert("MQTT not connected");
-  }
-});
-pump1OffBtn.addEventListener("click", () => {
-  if (client.connected) {
-    client.publish("ttgo/relay1_control", "OFF");
-    setPump1ButtonState("OFF");
-    console.log("🔴 Pump1 OFF sent");
-  } else {
-    alert("MQTT not connected");
-  }
-});
+function setPump1ButtonState(state){ pump1OnBtn.classList.remove("active-on"); pump1OffBtn.classList.remove("active-off"); if(state==="ON") pump1OnBtn.classList.add("active-on"); if(state==="OFF") pump1OffBtn.classList.add("active-off"); }
+pump1OnBtn.addEventListener("click", ()=>{ if(role!=="admin") return; if(client.connected){ client.publish("ttgo/relay1_control","ON"); setPump1ButtonState("ON"); console.log("🟢 Pump1 ON sent"); } else alert("MQTT not connected"); });
+pump1OffBtn.addEventListener("click", ()=>{ if(role!=="admin") return; if(client.connected){ client.publish("ttgo/relay1_control","OFF"); setPump1ButtonState("OFF"); console.log("🔴 Pump1 OFF sent"); } else alert("MQTT not connected"); });
 
-/* === Fertilizer schedule UI & MQTT publish/receive === */
+/* --- Fertilizer schedule UI --- */
 const fertDay = document.getElementById("fertDay");
 const fertTime = document.getElementById("fertTime");
 const fertDuration = document.getElementById("fertDuration");
 const countdownEl = document.getElementById("nextFertCountdown");
 const saveBtn = document.getElementById("saveFertSchedule");
 
-let saved = JSON.parse(localStorage.getItem("fertilizerSchedule")) || {};
+let saved = JSON.parse(localStorage.getItem("fertilizerSchedule") || "{}") || {};
+if(saved && saved.day) {
+  try { fertDay.value = saved.day; fertTime.value = saved.time || ""; fertDuration.value = saved.duration || fertDuration.value; } catch(e){}
+  updateCountdown();
+}
 
-function updateCountdown() {
-  const day = fertDay.value;
-  const time = fertTime.value;
-  if (!day || !time) {
-    countdownEl.textContent = "Next fertilization in: --";
-    return;
-  }
-
+function updateCountdown(){
+  const day = fertDay.value; const time = fertTime.value;
+  if(!day || !time){ countdownEl.textContent = "Next fertilization in: --"; return; }
   const now = new Date();
   const target = new Date(now);
   const days = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
   const targetDay = days.indexOf(day);
-
   let diffDays = targetDay - now.getDay();
-  if (diffDays < 0 || (diffDays === 0 && time <= now.toTimeString().slice(0,5))) diffDays += 7;
+  if(diffDays < 0 || (diffDays === 0 && time <= now.toTimeString().slice(0,5))) diffDays += 7;
   target.setDate(now.getDate() + diffDays);
-  const [hh, mm] = time.split(":").map(Number);
-  target.setHours(hh, mm, 0, 0);
-
-  const diffMs = target - now;
-  const diffMin = Math.floor(diffMs / 60000);
-  const d = Math.floor(diffMin / 1440);
-  const h = Math.floor((diffMin % 1440) / 60);
-  const m = diffMin % 60;
-
+  const [hh, mm] = time.split(":").map(Number); target.setHours(hh, mm, 0, 0);
+  const diffMs = target - now; const diffMin = Math.floor(diffMs/60000);
+  const d = Math.floor(diffMin/1440); const h = Math.floor((diffMin%1440)/60); const m = diffMin%60;
   countdownEl.textContent = `Next fertilization in: ${d}d ${h}h ${m}m`;
 }
 updateCountdown();
 setInterval(updateCountdown, 60000);
 
-function publishSchedule(schedule) {
-  if (client.connected) {
+function publishSchedule(schedule){
+  if(role !== "admin") return;
+  if(client.connected){
     client.publish("ttgo/fertilizer_schedule", JSON.stringify(schedule));
-    console.log("📡 Published schedule:", schedule);
+    try { notify('Schedule Published', new Date().toLocaleString(), `Day:${schedule.day} Time:${schedule.time} Dur:${schedule.duration}m`); } catch(e){console.error(e);}
+    showLatestScheduleToast(schedule);
   } else {
     window.pendingSchedule = schedule;
     console.warn("⚠️ MQTT not connected. Schedule will send on reconnect.");
   }
 }
 
-saveBtn.addEventListener("click", () => {
-  const schedule = {
-    day: fertDay.value,
-    time: fertTime.value,
-    duration: fertDuration.value
-  };
+saveBtn.addEventListener("click", ()=>{
+  if(role !== "admin") return;
+  const schedule = { day: fertDay.value, time: fertTime.value, duration: fertDuration.value };
   localStorage.setItem("fertilizerSchedule", JSON.stringify(schedule));
   publishSchedule(schedule);
   updateCountdown();
+  notify('Schedule Saved', new Date().toLocaleString(), `Day:${schedule.day} Time:${schedule.time} Dur:${schedule.duration}m`);
+  showLatestScheduleToast(schedule);
 });
 
-client.subscribe("ttgo/fertilizer_schedule");
+/* handle incoming messages */
 client.on("message", (topic, msg) => {
-  if (topic === "ttgo/fertilizer_schedule") {
+  if(topic === "ttgo/fertilizer_schedule"){
     try {
       const schedule = JSON.parse(msg.toString());
-      if (schedule.day) fertDay.value = schedule.day;
-      if (schedule.time) fertTime.value = schedule.time;
-      if (schedule.duration) fertDuration.value = schedule.duration;
+      if(schedule.day) fertDay.value = schedule.day;
+      if(schedule.time) fertTime.value = schedule.time;
+      if(schedule.duration) fertDuration.value = schedule.duration;
       updateCountdown();
       localStorage.setItem("fertilizerSchedule", JSON.stringify(schedule));
-      console.log("📡 Schedule received from MQTT:", schedule);
-    } catch(e) { console.error(e); }
+      notify('Schedule Received', new Date().toLocaleString(), `Day:${schedule.day || '-'} Time:${schedule.time || '-'} Dur:${schedule.duration || '-' }m`);
+      showLatestScheduleToast({day: schedule.day, time: schedule.time, duration: schedule.duration});
+    } catch(e){ console.error(e); }
     return;
   }
-  if(topic==="ttgo/notifications"){
+  if(topic === "ttgo/notifications"){
     try {
       const notif = JSON.parse(msg.toString());
-      // expected payload: { type: "Alert", time: "2025-11-23 12:00", detail: "Soil dry" }
       notify(notif.type || 'Notification', notif.time || new Date().toLocaleString(), notif.detail || '');
-    } catch(e){console.error(e);}
+    } catch(e){ console.error(e); }
     return;
   }
 
-  // sensor messages (ttgo/all_sensors)
-  try{
+  /* Otherwise assume sensor data and pump states */
+  try {
     const d = JSON.parse(msg.toString());
 
-    // Soil Moisture
+    // Soil
     const soilAvg = Number(d.soil_avg ?? d.soil ?? 0);
-    soilGauge.setValue(soilAvg);
-    document.getElementById('soilValue').innerText = soilAvg.toFixed(1)+' %';
+    soilGauge.setValue(soilAvg); document.getElementById('soilValue').innerText = soilAvg.toFixed(1)+' %';
     let soilStatus = '—', soilClass = 'muted';
-    if (soilAvg <= 40) { soilStatus = 'Dry'; soilClass = 'bad'; }
-    else if (soilAvg > 40) { soilStatus = 'Wet'; soilClass = 'ok'; }
+    if(soilAvg <= 40){ soilStatus='Dry'; soilClass='bad'; } else if(soilAvg>40){ soilStatus='Wet'; soilClass='ok'; }
     document.getElementById('soilStatusText').innerHTML = `<span class="badge ${soilClass}">${soilStatus}</span>`;
 
-    // Temperature
+    // Temp
     const tempVal = Number(d.temp ?? d.temperature ?? 0);
-    tempGauge.setValue(tempVal);
-    document.getElementById('tempValue').innerText = tempVal.toFixed(1)+' °C';
-    let tempStatus = '—', tempClass = 'muted';
-    if (tempVal <= 30) { tempStatus = 'Warm'; tempClass = 'ok'; }
-    else if (tempVal > 30) { tempStatus = 'Hot'; tempClass = 'bad'; }
+    tempGauge.setValue(tempVal); document.getElementById('tempValue').innerText = tempVal.toFixed(1)+' °C';
+    let tempStatus='—', tempClass='muted';
+    if(tempVal <= 30){ tempStatus='Warm'; tempClass='ok'; } else if(tempVal>30){ tempStatus='Hot'; tempClass='bad'; }
     document.getElementById('tempStatusText').innerHTML = `<span class="badge ${tempClass}">${tempStatus}</span>`;
 
-    // Water Level
+    // Water
     const waterCm = Number(d.water_level ?? d.water ?? 0);
-    waveWater.setValue(waterCm);
-    let waterStatus = '—', waterClass = 'muted';
-    if (waterCm <= 20) { waterStatus = 'Low'; waterClass = 'bad'; }
-    else if (waterCm > 20) { waterStatus = 'Sufficient'; waterClass = 'ok'; }
+    waveWater.setValue(waterCm); let waterStatus='—', waterClass='muted';
+    if(waterCm <= 20){ waterStatus='Low'; waterClass='bad'; } else if(waterCm>20){ waterStatus='Sufficient'; waterClass='ok'; }
     document.getElementById('waterStatusText').innerHTML = `<span class="badge ${waterClass}">${waterStatus}</span>`;
 
-    // Fertilizer Level
-    const fertCm  = Number(d.fert_level ?? d.fert ?? 0);
-    waveFert.setValue(fertCm);
-    let fertStatus = '—', fertClass = 'muted';
-    if (fertCm <= 20) { fertStatus = 'Low'; fertClass = 'bad'; }
-    else if (fertCm > 20) { fertStatus = 'Sufficient'; fertClass = 'ok'; }
+    // Fert
+    const fertCm = Number(d.fert_level ?? d.fert ?? 0);
+    waveFert.setValue(fertCm); let fertStatus='—', fertClass='muted';
+    if(fertCm <= 20){ fertStatus='Low'; fertClass='bad'; } else if(fertCm>20){ fertStatus='Sufficient'; fertClass='ok'; }
     document.getElementById('fertStatusText').innerHTML = `<span class="badge ${fertClass}">${fertStatus}</span>`;
 
-    // Chart logic
     const now = new Date().toLocaleTimeString();
+    // Charts
     chartSoil.data.labels.push(now); chartSoil.data.datasets[0].data.push(soilAvg);
-    if(chartSoil.data.labels.length > 50){ chartSoil.data.labels.shift(); chartSoil.data.datasets[0].data.shift(); }
-    chartSoil.update();
-
+    if(chartSoil.data.labels.length>50){ chartSoil.data.labels.shift(); chartSoil.data.datasets[0].data.shift(); } chartSoil.update();
     chartTemp.data.labels.push(now); chartTemp.data.datasets[0].data.push(tempVal);
-    if(chartTemp.data.labels.length > 50){ chartTemp.data.labels.shift(); chartTemp.data.datasets[0].data.shift(); }
-    chartTemp.update();
-
+    if(chartTemp.data.labels.length>50){ chartTemp.data.labels.shift(); chartTemp.data.datasets[0].data.shift(); } chartTemp.update();
     chartWater.data.labels.push(now); chartWater.data.datasets[0].data.push(waterCm);
-    if(chartWater.data.labels.length > 50){ chartWater.data.labels.shift(); chartWater.data.datasets[0].data.shift(); }
-    chartWater.update();
-
+    if(chartWater.data.labels.length>50){ chartWater.data.labels.shift(); chartWater.data.datasets[0].data.shift(); } chartWater.update();
     chartFert.data.labels.push(now); chartFert.data.datasets[0].data.push(fertCm);
-    if(chartFert.data.labels.length > 50){ chartFert.data.labels.shift(); chartFert.data.datasets[0].data.shift(); }
-    chartFert.update();
+    if(chartFert.data.labels.length>50){ chartFert.data.labels.shift(); chartFert.data.datasets[0].data.shift(); } chartFert.update();
 
-    // Relays
+    // Relays/pumps - detect state changes and notify per ON/OFF every time
     let relay1Badge = document.getElementById('relay1Badge');
     let relay2Badge = document.getElementById('relay2Badge');
+
+    // Relay1 handling
     if (typeof d.relay1 === "undefined" || d.relay1 === null || d.relay1 === "") {
       relay1Badge.className = 'pump-badge muted'; relay1Badge.innerText = '—';
-      setPump1ButtonState(""); // remove states for pump1 buttons
     } else {
       const relay1On = d.relay1 === "ON";
       relay1Badge.className = 'pump-badge ' + (relay1On ? 'ok' : 'bad'); relay1Badge.innerText = relay1On ? 'ON' : 'OFF';
       setPump1ButtonState(relay1On ? "ON" : "OFF");
+      // Notify ON/OFF on change (every change)
+      if (lastRelay1State === null || lastRelay1State !== relay1On) {
+        notify('Pump1', new Date().toLocaleString(), relay1On ? 'ON' : 'OFF', { daily: false });
+        lastRelay1State = relay1On;
+      }
     }
-    // Pump2: badge only (no manual buttons)
+
+    // Relay2 handling
     if (typeof d.relay2 === "undefined" || d.relay2 === null || d.relay2 === "") {
       relay2Badge.className = 'pump-badge muted'; relay2Badge.innerText = '—';
     } else {
       const relay2Fertilizing = d.relay2 === "Fertilizing";
       relay2Badge.className = 'pump-badge ' + (relay2Fertilizing ? 'ok' : 'bad'); relay2Badge.innerText = relay2Fertilizing ? 'Fertilizing' : 'Waiting';
+      // Notify on change
+      if (lastRelay2State === null || lastRelay2State !== relay2Fertilizing) {
+        notify('Pump2', new Date().toLocaleString(), relay2Fertilizing ? 'Fertilizing' : 'Waiting', { daily: false });
+        lastRelay2State = relay2Fertilizing;
+      }
     }
 
-    // Export data
-    storedRows.push([
-      new Date().toLocaleString(),
-      soilAvg,
-      tempVal,
-      waterCm,
-      fertCm,
-      relay1Badge.innerText,
-      relay2Badge.innerText
-    ]);
-    if(storedRows.length>5000)storedRows.shift();
-  }catch(e){console.error(e);}
+    // Store row for export
+    storedRows.push([ new Date().toLocaleString(), soilAvg, tempVal, waterCm, fertCm, relay1Badge.innerText, relay2Badge.innerText ]);
+    if(storedRows.length>5000) storedRows.shift();
+
+  } catch(e){ console.error(e); }
 });
 
-/* --------------------------
-   Export to Excel
-   -------------------------- */
-document.getElementById('exportBtn').addEventListener('click',()=>{
-  if(storedRows.length===0){ alert('No data to export'); return; }
+/* -------------------------
+   Manual export handler
+   ------------------------- */
+document.getElementById('exportBtn').addEventListener('click', ()=>{
+  if(role !== "admin") return;
+  if(storedRows.length === 0){ alert('No data to export'); return; }
   const wb = XLSX.utils.book_new();
-  const ws = XLSX.utils.aoa_to_sheet([
-    ['Timestamp','Soil %','Temp °C','Water cm','Fertilizer cm','Relay1','Relay2'],
-    ...storedRows
-  ]);
-  XLSX.utils.book_append_sheet(wb,ws,'Sensor Data');
-  XLSX.writeFile(wb,'sensor_data.xlsx');
+  const ws = XLSX.utils.aoa_to_sheet([ ['Timestamp','Soil %','Temp °C','Water cm','Fertilizer cm','Relay1','Relay2'], ...storedRows ]);
+  XLSX.utils.book_append_sheet(wb, ws, 'Sensor Data');
+  XLSX.writeFile(wb, 'sensor_data.xlsx');
 });
 
-/* --------------------------
-   Gauges, waves and charts
-   -------------------------- */
+/* -------------------------
+   Auto-export (admin-only) scheduler
+   ------------------------- */
+let autoExportTimeout = null;
+let autoExportInterval = null;
+
+function performAutoExport(){
+  if(role !== "admin"){
+    console.warn("Auto-export skipped: not admin");
+    notify('Auto Export Skipped', new Date().toLocaleString(), 'Not admin at scheduled time', { daily: false, force: true });
+    return;
+  }
+  try {
+    const filename = 'sensor_data_' + new Date().toISOString().slice(0,10) + '.xlsx';
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet([ ['Timestamp','Soil %','Temp °C','Water cm','Fertilizer cm','Relay1','Relay2'], ...storedRows ]);
+    XLSX.utils.book_append_sheet(wb, ws, 'Sensor Data');
+    XLSX.writeFile(wb, filename);
+    console.log('Auto-export saved as', filename);
+    notify('Auto Export', new Date().toLocaleString(), filename);
+  } catch(err){
+    console.error('Auto-export failed', err);
+    notify('Auto Export Failed', new Date().toLocaleString(), (err && err.message) ? err.message : String(err), { force: true });
+  }
+}
+
+function scheduleAutoExportAt(hour, minute){
+  if(autoExportTimeout){ clearTimeout(autoExportTimeout); autoExportTimeout = null; }
+  if(autoExportInterval){ clearInterval(autoExportInterval); autoExportInterval = null; }
+  const now = new Date(); const next = new Date(now);
+  next.setHours(hour, minute, 0, 0);
+  if(next <= now) next.setDate(next.getDate()+1);
+  const msUntilNext = next - now;
+  autoExportTimeout = setTimeout(()=>{ performAutoExport(); autoExportInterval = setInterval(performAutoExport, 24*60*60*1000); }, msUntilNext);
+}
+
+function startAutoExportScheduler(){
+  if(role !== "admin") return;
+  if(autoExportTimeout || autoExportInterval) return;
+  scheduleAutoExportAt(18,0);
+  notify('Auto Export Scheduled', new Date().toLocaleString(), 'Daily at 18:00 while admin is logged in');
+}
+function stopAutoExportScheduler(){ if(autoExportTimeout){ clearTimeout(autoExportTimeout); autoExportTimeout=null; } if(autoExportInterval){ clearInterval(autoExportInterval); autoExportInterval=null; } notify('Auto Export Stopped', new Date().toLocaleString(), 'Admin logged out or scheduler stopped'); }
+
+/* -------------------------
+   Gauges, charts and storedRows (original implementations)
+   ------------------------- */
 function createGauge(canvasId, min, max, colorZones) {
-  const canvas=document.getElementById(canvasId);
-  const ctx=canvas.getContext('2d');
+  const canvas=document.getElementById(canvasId); const ctx=canvas.getContext('2d');
   let value=min, targetValue=min;
   function draw(){
     const w=canvas.width,h=canvas.height,cx=w/2,cy=h,radius=Math.min(w/2,h);
@@ -601,32 +980,27 @@ function createGauge(canvasId, min, max, colorZones) {
   return { setValue(v){ targetValue=Math.max(min,Math.min(max,v)); } };
 }
 const soilGauge = createGauge('soilGauge',0,100,[{min:0,max:40,color:'#ca3838'},{min:40,max:60,color:'#e6e600'},{min:60,max:100,color:'#00b500'}]);
-const tempGauge = createGauge('tempGauge',0,50,[{min:0,max:25,color:'#00b500'},{min:25,max:35,color:'#e6e600'},{min:35,max:50,color:'#ca3838'}]);
+const tempGauge = createGauge('tempGauge',0,50,[{min:0,max:25,color:'#00b500'},{min:25,max:35,color:'#e6e600'},{min:35,max:50,color:'#ca38338'}]);
+
 function createWave(canvasId,color,maxCm){
-  const canvas=document.getElementById(canvasId);const ctx=canvas.getContext('2d');
-  let value=0,phase=0;
+  const canvas=document.getElementById(canvasId); const ctx=canvas.getContext('2d');
+  let value=0, phase=0;
   function draw(){
-    const width=canvas.width,height=canvas.height;
-    ctx.clearRect(0,0,width,height);
+    const width=canvas.width, height=canvas.height; ctx.clearRect(0,0,width,height);
     ctx.beginPath(); ctx.moveTo(10,height-10); ctx.lineTo(10,10); ctx.quadraticCurveTo(width/2,0,width-10,10); ctx.lineTo(width-10,height-10); ctx.closePath();
     ctx.strokeStyle='#555'; ctx.lineWidth=2; ctx.stroke();
-    const waveHeight=8;const yOffset=height-10-(value/maxCm)*(height-20);
+    const waveHeight=8; const yOffset=height-10-(value/maxCm)*(height-20);
     ctx.beginPath();
-    for(let x=0;x<=width;x++){
-      const y=yOffset+Math.sin((x/width*2*Math.PI)+phase)*waveHeight;
-      ctx.lineTo(x,y);
-    }
+    for(let x=0;x<=width;x++){ const y=yOffset+Math.sin((x/width*2*Math.PI)+phase)*waveHeight; ctx.lineTo(x,y); }
     ctx.lineTo(width,height-10); ctx.lineTo(0,height-10); ctx.closePath();
     ctx.fillStyle=color; ctx.fill();
-    ctx.fillStyle='#111'; ctx.font='bold 20px Inter, Arial';
-    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillStyle='#111'; ctx.font='bold 20px Inter, Arial'; ctx.textAlign='center'; ctx.textBaseline='middle';
     ctx.fillText(value.toFixed(1)+' cm',width/2,height/2);
     phase+=0.1; requestAnimationFrame(draw);
-  }
-  draw();
+  } draw();
   return { setValue(v){ value=Math.max(0,Math.min(maxCm,v)); } };
 }
-const MAX_WATER_CM=100,MAX_FERT_CM=100;
+const MAX_WATER_CM=100, MAX_FERT_CM=100;
 const waveWater = createWave('waveWater','#1976d2',MAX_WATER_CM);
 const waveFert = createWave('waveFert','#fb8c00',MAX_FERT_CM);
 
@@ -639,8 +1013,60 @@ const chartWater = new Chart(chartWaterCtx,{type:'line',data:{labels:[],datasets
 const chartFertCtx = document.getElementById('chartFert').getContext('2d');
 const chartFert = new Chart(chartFertCtx,{type:'line',data:{labels:[],datasets:[{label:'Fert cm',data:[],borderColor:'#fb8c00',backgroundColor:'rgba(251,140,0,0.1)',fill:true}]},options:{scales:{x:{display:false},y:{min:0,max:MAX_FERT_CM}},plugins:{legend:{display:false}}}});
 
-// Stored rows for export
 const storedRows = [];
+
+/* -------------------------
+   Admin-only auto-export start/stop handled in renderRoleUI
+   ------------------------- */
+function renderRoleUI(){
+  const banner = document.getElementById("userRoleBanner");
+  const curRoleSpan = document.getElementById("curRole");
+  if(!role){
+    banner.style.display = "none"; showLogin();
+    document.getElementById("pump1OnBtn").disabled = true;
+    document.getElementById("pump1OffBtn").disabled = true;
+    document.getElementById("fertDay").disabled = true;
+    document.getElementById("fertTime").disabled = true;
+    document.getElementById("fertDuration").disabled = true;
+    document.getElementById("saveFertSchedule").disabled = true;
+    document.getElementById("exportBtn").disabled = true;
+    renderPhoneUI();
+    stopAutoExportScheduler();
+    return;
+  }
+  banner.style.display = "flex";
+  curRoleSpan.textContent = "Logged in as: " + (role === "admin" ? "Admin" : "User (View Only)");
+  const adminOnly = role === "admin";
+  document.getElementById("pump1OnBtn").disabled = !adminOnly;
+  document.getElementById("pump1OffBtn").disabled = !adminOnly;
+  document.getElementById("fertDay").disabled = !adminOnly;
+  document.getElementById("fertTime").disabled = !adminOnly;
+  document.getElementById("fertDuration").disabled = !adminOnly;
+  document.getElementById("saveFertSchedule").disabled = !adminOnly;
+  document.getElementById("exportBtn").disabled = !adminOnly;
+  if(!adminOnly){
+    document.getElementById("exportBtn").title = "Only admin can export";
+    document.getElementById("saveFertSchedule").title = "Only admin can change schedule";
+    document.getElementById("pump1OnBtn").title = "Only admin can operate";
+    document.getElementById("pump1OffBtn").title = "Only admin can operate";
+    stopAutoExportScheduler();
+  } else {
+    document.getElementById("exportBtn").title = "";
+    document.getElementById("saveFertSchedule").title = "";
+    document.getElementById("pump1OnBtn").title = "";
+    document.getElementById("pump1OffBtn").title = "";
+    startAutoExportScheduler();
+  }
+  renderPhoneUI();
+}
+
+/* initialize */
+window.onload = function(){ setRole(null); /* start not logged in */ };
+
+/* expose small helpers to console for testing */
+window._debug = {
+  notify, performAutoExport, startAutoExportScheduler, stopAutoExportScheduler, showLatestScheduleToast, deleteNotificationAt, clearAllNotifications
+};
 </script>
 </body>
 </html>
