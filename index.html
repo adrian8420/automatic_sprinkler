@@ -390,10 +390,11 @@ canvas { display:block; }
       <label>Time:
         <input type="time" id="fertTime">
       </label>
-      <label>Duration (min):
-        <input type="number" id="fertDuration" min="1" max="60" value="10" style="width:60px;">
+      <label>Duration:
+        <input type="number" id="fertDurationMin" min="0" value="1" style="width:60px;" /> <small>min</small>
+        <input type="number" id="fertDurationSec" min="0" max="59" value="30" style="width:60px; margin-left:6px;" /> <small>sec</small>
       </label>
-      <button id="saveFertSchedule" style="padding:6px 10px; background:#4caf50; color:#fff; border:none; border-radius:6px; cursor:pointer;">💾 Save</button>
+      <button id="saveFertSchedule" style="padding:6px 10px; background:#4caf50; color:#fff; border:none; border-radius:6px; cursor:pointer;">Update</button>
       <span id="nextFertCountdown" style="margin-left:10px; font-size:14px; color:gray;">
         Next fertilization in: --
       </span>
@@ -404,7 +405,7 @@ canvas { display:block; }
     <h3>📱 Alert Phone Number</h3>
     <form id="phoneForm" style="display:flex; flex-direction:row; gap:10px; justify-content:center; align-items:center;">
       <input id="phoneInput" type="tel" placeholder="Enter phone number" style="padding:7px 11px; border-radius:7px; border:1px solid #bbb; font-size:15px; min-width:160px;" pattern="^(\+?\d{9,16})$" required />
-      <button id="savePhoneBtn" type="submit" style="padding:8px 26px; background:#0b84d4; color:#fff; border:none; border-radius:7px; font-size:15px; font-weight:700; cursor:pointer;">💾 Save</button>
+      <button id="savePhoneBtn" type="submit" style="padding:8px 26px; background:#0b84d4; color:#fff; border:none; border-radius:7px; font-size:15px; font-weight:700; cursor:pointer;">Update</button>
     </form>
     <div id="phoneMsg" style="color:#e53935; font-size:14px; margin-top:8px; min-height:20px;"></div>
     <div style="color:#666; font-size:14px; margin-top:10px;">Current phone: <span id="displayPhone" style="font-weight:700;">—</span></div>
@@ -688,12 +689,25 @@ window.addEventListener("DOMContentLoaded", ()=>{
 /* -------------------------
    Latest Schedule toast/pill
    ------------------------- */
-const latestScheduleToast = document.getElementById("latestScheduleToast");
+const latestScheduleToast = document.getElementById("latestScheduleToast"); // optional element (may be null)
 let latestSchedule = null;
 
+function formatDuration(mins, secs) {
+  mins = Number(mins) || 0;
+  secs = Number(secs) || 0;
+  const parts = [];
+  if(mins) parts.push(`${mins}m`);
+  if(secs) parts.push(`${secs}s`);
+  if(parts.length === 0) return '0s';
+  return parts.join(' ');
+}
 function showLatestScheduleToast(schedule, opts={autoHide: true, timeout:6000}) {
   latestSchedule = schedule;
-  const txt = `Latest Schedule — Day: ${schedule.day || '-'} · Time: ${schedule.time || '-'} · Dur: ${schedule.duration || '-'}m`;
+  const durLabel = schedule.duration_seconds != null
+    ? formatDuration(schedule.duration_min || Math.floor(schedule.duration_seconds/60), schedule.duration_sec || (schedule.duration_seconds % 60))
+    : (schedule.duration ? String(schedule.duration) : '-');
+  const txt = `Latest Schedule — Day: ${schedule.day || '-'} · Time: ${schedule.time || '-'} · Dur: ${durLabel}`;
+  if (!latestScheduleToast) return; // safe if element absent
   latestScheduleToast.innerHTML = `<span>${escapeHtml(txt)}</span> <button class="closeBtn" aria-label="Close latest schedule">✕</button>`;
   latestScheduleToast.style.display = "block";
   const closeBtn = latestScheduleToast.querySelector(".closeBtn");
@@ -717,19 +731,24 @@ client.on('connect', ()=>{
   document.getElementById('connDot').style.background='#4caf50';
   document.getElementById('connText').innerText='Connected';
 
+  // publish pending schedule if present
   if (window.pendingSchedule) {
     client.publish("ttgo/fertilizer_schedule", JSON.stringify(window.pendingSchedule));
     try { notify('Schedule Published', new Date().toLocaleString(), JSON.stringify(window.pendingSchedule)); } catch(e){console.error(e);}
     try{
       const ps = window.pendingSchedule;
-      showLatestScheduleToast({day:ps.day, time:ps.time, duration:ps.duration});
+      showLatestScheduleToast({day:ps.day, time:ps.time, duration_seconds:ps.duration_seconds, duration_min:ps.duration_min, duration_sec:ps.duration_sec});
     }catch(e){}
     window.pendingSchedule = null;
-  } else if (fertDay && fertTime && fertDuration && fertDay.value && fertTime.value) {
-    const sch = { day: fertDay.value, time: fertTime.value, duration: fertDuration.value };
-    client.publish("ttgo/fertilizer_schedule", JSON.stringify(sch));
-    try { notify('Schedule Published', new Date().toLocaleString(), `Day:${sch.day} Time:${sch.time} Dur:${sch.duration}m`); } catch(e){console.error(e);}
-    showLatestScheduleToast(sch);
+  } else {
+    // If there is a stored schedule, publish it (converted to duration_seconds)
+    const stored = readSavedSchedule();
+    if(stored && stored.day && stored.time){
+      const sch = toSchedulePayload(stored);
+      client.publish("ttgo/fertilizer_schedule", JSON.stringify(sch));
+      try { notify('Schedule Published', new Date().toLocaleString(), `Day:${sch.day} Time:${sch.time} Dur:${formatDuration(sch.duration_min, sch.duration_sec)}`); } catch(e){console.error(e);}
+      showLatestScheduleToast(sch);
+    }
   }
 });
 
@@ -747,13 +766,38 @@ pump1OffBtn.addEventListener("click", ()=>{ if(role!=="admin") return; if(client
 /* --- Fertilizer schedule UI --- */
 const fertDay = document.getElementById("fertDay");
 const fertTime = document.getElementById("fertTime");
-const fertDuration = document.getElementById("fertDuration");
+const fertDurationMin = document.getElementById("fertDurationMin");
+const fertDurationSec = document.getElementById("fertDurationSec");
 const countdownEl = document.getElementById("nextFertCountdown");
 const saveBtn = document.getElementById("saveFertSchedule");
 
-let saved = JSON.parse(localStorage.getItem("fertilizerSchedule") || "{}") || {};
+function readSavedSchedule() {
+  try {
+    return JSON.parse(localStorage.getItem("fertilizerSchedule") || "{}") || {};
+  } catch(e) { return {}; }
+}
+let saved = readSavedSchedule();
 if(saved && saved.day) {
-  try { fertDay.value = saved.day; fertTime.value = saved.time || ""; fertDuration.value = saved.duration || fertDuration.value; } catch(e){}
+  try {
+    fertDay.value = saved.day || fertDay.value;
+    fertTime.value = saved.time || "";
+    // support both older format and new: if saved.duration_seconds exists use it
+    if(typeof saved.duration_seconds !== "undefined"){
+      const total = Number(saved.duration_seconds) || 0;
+      const mins = Math.floor(total/60);
+      const secs = total % 60;
+      fertDurationMin.value = mins;
+      fertDurationSec.value = secs;
+    } else {
+      // older values: duration_min/duration_sec or duration (minutes)
+      if(typeof saved.duration_min !== "undefined") fertDurationMin.value = saved.duration_min;
+      if(typeof saved.duration_sec !== "undefined") fertDurationSec.value = saved.duration_sec;
+      if(typeof saved.duration !== "undefined" && saved.duration !== "") {
+        // assume minutes
+        fertDurationMin.value = Math.floor(Number(saved.duration));
+      }
+    }
+  } catch(e){}
   updateCountdown();
 }
 
@@ -775,27 +819,52 @@ function updateCountdown(){
 updateCountdown();
 setInterval(updateCountdown, 60000);
 
+/* Build schedule payload that includes duration_seconds and a human-friendly split */
+function toSchedulePayload(formData){
+  const mins = Math.max(0, Number(formData.duration_min || formData.durationMin || formData.durationMinutes || formData.duration_minute || 0));
+  const secs = Math.max(0, Number(formData.duration_sec || formData.durationSec || formData.durationSeconds || formData.duration_second || 0));
+  const totalSeconds = mins*60 + secs;
+  return {
+    day: formData.day,
+    time: formData.time,
+    duration_seconds: totalSeconds,
+    duration_min: mins,
+    duration_sec: secs
+  };
+}
+
+/* changed Save -> Update behavior: update existing stored schedule object (admin only) */
+saveBtn.addEventListener("click", ()=>{
+  if(role !== "admin") return;
+  // read minutes and seconds inputs
+  const mins = Math.max(0, Math.floor(Number(fertDurationMin.value) || 0));
+  let secs = Math.max(0, Math.floor(Number(fertDurationSec.value) || 0));
+  if(secs > 59) { secs = secs % 60; } // normalize if user entered >59
+  const schedule = {
+    day: fertDay.value,
+    time: fertTime.value,
+    duration_seconds: mins*60 + secs,
+    duration_min: mins,
+    duration_sec: secs
+  };
+  localStorage.setItem("fertilizerSchedule", JSON.stringify(schedule));
+  publishSchedule(schedule);
+  updateCountdown();
+  notify('Schedule Updated', new Date().toLocaleString(), `Day:${schedule.day} Time:${schedule.time} Dur:${formatDuration(schedule.duration_min, schedule.duration_sec)}`);
+  showLatestScheduleToast(schedule);
+});
+
 function publishSchedule(schedule){
   if(role !== "admin") return;
   if(client.connected){
     client.publish("ttgo/fertilizer_schedule", JSON.stringify(schedule));
-    try { notify('Schedule Published', new Date().toLocaleString(), `Day:${schedule.day} Time:${schedule.time} Dur:${schedule.duration}m`); } catch(e){console.error(e);}
+    try { notify('Schedule Updated', new Date().toLocaleString(), `Day:${schedule.day} Time:${schedule.time} Dur:${formatDuration(schedule.duration_min, schedule.duration_sec)}`); } catch(e){console.error(e);}
     showLatestScheduleToast(schedule);
   } else {
     window.pendingSchedule = schedule;
     console.warn("⚠️ MQTT not connected. Schedule will send on reconnect.");
   }
 }
-
-saveBtn.addEventListener("click", ()=>{
-  if(role !== "admin") return;
-  const schedule = { day: fertDay.value, time: fertTime.value, duration: fertDuration.value };
-  localStorage.setItem("fertilizerSchedule", JSON.stringify(schedule));
-  publishSchedule(schedule);
-  updateCountdown();
-  notify('Schedule Saved', new Date().toLocaleString(), `Day:${schedule.day} Time:${schedule.time} Dur:${schedule.duration}m`);
-  showLatestScheduleToast(schedule);
-});
 
 /* handle incoming messages */
 client.on("message", (topic, msg) => {
@@ -804,11 +873,29 @@ client.on("message", (topic, msg) => {
       const schedule = JSON.parse(msg.toString());
       if(schedule.day) fertDay.value = schedule.day;
       if(schedule.time) fertTime.value = schedule.time;
-      if(schedule.duration) fertDuration.value = schedule.duration;
+
+      // Accept either duration_seconds OR duration_min/duration_sec OR legacy duration field
+      if(typeof schedule.duration_seconds !== "undefined"){
+        const total = Number(schedule.duration_seconds) || 0;
+        fertDurationMin.value = Math.floor(total/60);
+        fertDurationSec.value = total % 60;
+      } else if(typeof schedule.duration_min !== "undefined" || typeof schedule.duration_sec !== "undefined"){
+        if(typeof schedule.duration_min !== "undefined") fertDurationMin.value = schedule.duration_min;
+        if(typeof schedule.duration_sec !== "undefined") fertDurationSec.value = schedule.duration_sec;
+      } else if(typeof schedule.duration !== "undefined"){
+        // legacy: duration in minutes
+        fertDurationMin.value = Math.floor(Number(schedule.duration) || 0);
+        fertDurationSec.value = 0;
+      }
+
       updateCountdown();
-      localStorage.setItem("fertilizerSchedule", JSON.stringify(schedule));
-      notify('Schedule Received', new Date().toLocaleString(), `Day:${schedule.day || '-'} Time:${schedule.time || '-'} Dur:${schedule.duration || '-' }m`);
-      showLatestScheduleToast({day: schedule.day, time: schedule.time, duration: schedule.duration});
+      // store as new unified format (duration_seconds + split)
+      const mins = Number(fertDurationMin.value) || 0;
+      const secs = Number(fertDurationSec.value) || 0;
+      const unified = { day: fertDay.value, time: fertTime.value, duration_seconds: mins*60 + secs, duration_min: mins, duration_sec: secs };
+      localStorage.setItem("fertilizerSchedule", JSON.stringify(unified));
+      notify('Schedule Received', new Date().toLocaleString(), `Day:${unified.day || '-'} Time:${unified.time || '-'} Dur:${formatDuration(unified.duration_min, unified.duration_sec)}`);
+      showLatestScheduleToast(unified);
     } catch(e){ console.error(e); }
     return;
   }
@@ -1027,7 +1114,8 @@ function renderRoleUI(){
     document.getElementById("pump1OffBtn").disabled = true;
     document.getElementById("fertDay").disabled = true;
     document.getElementById("fertTime").disabled = true;
-    document.getElementById("fertDuration").disabled = true;
+    document.getElementById("fertDurationMin").disabled = true;
+    document.getElementById("fertDurationSec").disabled = true;
     document.getElementById("saveFertSchedule").disabled = true;
     document.getElementById("exportBtn").disabled = true;
     renderPhoneUI();
@@ -1041,7 +1129,8 @@ function renderRoleUI(){
   document.getElementById("pump1OffBtn").disabled = !adminOnly;
   document.getElementById("fertDay").disabled = !adminOnly;
   document.getElementById("fertTime").disabled = !adminOnly;
-  document.getElementById("fertDuration").disabled = !adminOnly;
+  document.getElementById("fertDurationMin").disabled = !adminOnly;
+  document.getElementById("fertDurationSec").disabled = !adminOnly;
   document.getElementById("saveFertSchedule").disabled = !adminOnly;
   document.getElementById("exportBtn").disabled = !adminOnly;
   if(!adminOnly){
