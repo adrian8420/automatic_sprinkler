@@ -101,7 +101,26 @@ h1 { font-size:18px; margin:0; }
   font-size: 15px;
   display: none;
 }
-.notif-panel.active { display: block; }
+/* New: special "Current Fertilizer Schedule" box styling inside the notification panel */
+.notif-panel .current-schedule {
+  background: #ecf9ef;
+  border-radius: 10px;
+  padding: 12px;
+  margin: 6px 4px;
+  color: #0b662e;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.6);
+  font-size: 14px;
+}
+.notif-panel .current-schedule h4 {
+  margin: 0 0 6px 0;
+  font-size: 15px;
+  color: #0b662e;
+}
+.notif-panel .current-schedule .small {
+  color: var(--muted);
+  font-size: 13px;
+  margin-top: 6px;
+}
 .notif-panel .notif-item {
   display: flex; flex-direction: row; align-items: center; justify-content: space-between;
   gap:10px;
@@ -548,6 +567,75 @@ function updateNotifBadge(){
   }
 }
 
+/* Render notification panel with delete buttons and "Clear All"
+   Modified to include a "Current Fertilizer Schedule" box at the top (if a saved schedule exists),
+   matching the screenshot style (green box with details and small 'from saved schedule'). */
+function updateNotifDisplay(){
+  notifList = getNotifHistory();
+
+  // start building html
+  let html = '';
+
+  // 1) If there is a saved fertilizer schedule, render a special "Current Fertilizer Schedule" block at the top
+  try {
+    const savedSch = readSavedSchedule() || {};
+    if(savedSch && savedSch.day && savedSch.time){
+      const durLabel = (typeof savedSch.duration_seconds !== "undefined")
+        ? formatDuration(savedSch.duration_min, savedSch.duration_sec)
+        : (typeof savedSch.duration !== "undefined" ? String(savedSch.duration) : '-');
+      html += `<div class="current-schedule" aria-hidden="true">
+                <h4>Current Fertilizer Schedule</h4>
+                <div>Day: ${escapeHtml(savedSch.day)} · Time: ${escapeHtml(savedSch.time)} · Dur: ${escapeHtml(durLabel)}</div>
+                <div class="small">(from saved schedule)</div>
+               </div>`;
+    }
+  } catch(e){ console.error("render schedule in panel failed", e); }
+
+  // 2) Topbar with Clear All
+  html += `<div class="topbar"><strong>Notifications</strong><button id="clearAllBtn" class="clear-all">Clear All</button></div>`;
+
+  if (notifList.length > 0) {
+    // render newest first
+    for(let i = notifList.length - 1; i >= 0; i--) {
+      const n = notifList[i];
+      const safeType = escapeHtml(n.type || 'Notification');
+      const safeDetail = n.detail ? ` — ${escapeHtml(n.detail)}` : '';
+      const safeTime = escapeHtml(n.time || '');
+      html += `<div class="notif-item" data-index="${i}">
+                 <div class="left">
+                   <div><strong>${safeType}</strong>${safeDetail}</div>
+                   <div class="time">${safeTime}</div>
+                 </div>
+                 <div>
+                   <button class="delete-btn" data-index="${i}" aria-label="Delete notification">Delete</button>
+                 </div>
+               </div>`;
+    }
+  } else {
+    html += '<div style="color:#aaa;padding:20px 0;text-align:center;">No notifications.</div>';
+  }
+
+  notifPanel.innerHTML = html;
+
+  // attach handlers: delegated click for delete & clear-all
+  const clearAllBtn = document.getElementById('clearAllBtn');
+  if (clearAllBtn) {
+    clearAllBtn.onclick = () => {
+      if(!confirm('Clear all notifications?')) return;
+      clearAllNotifications();
+    };
+  }
+
+  // delete buttons - use event delegation instead of per-button to be safe
+  notifPanel.querySelectorAll('.delete-btn').forEach(btn => {
+    btn.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      const idx = Number(btn.getAttribute('data-index'));
+      deleteNotificationAt(idx);
+    });
+  });
+}
+
 /* safe simple html escape */
 function escapeHtml(s){ return String(s).replace(/[&<>"']/g, function(m){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"})[m]; }); }
 
@@ -614,117 +702,15 @@ function clearAllNotifications() {
   } catch(e) { console.error(e); }
 }
 
-/* -------------------------
-   Schedule helpers & schedule summary in the notif panel
-   ------------------------- */
-function getStoredFertilizerSchedule() {
-  try { return JSON.parse(localStorage.getItem("fertilizerSchedule") || "null"); } catch { return null; }
-}
-function dayIntToName(n) {
-  const days = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
-  if (typeof n === "number") return days[n] || String(n);
-  if (!isNaN(Number(n))) return days[Number(n)] || String(n);
-  return String(n);
-}
-function formatDuration(mins, secs) {
-  mins = Number(mins) || 0;
-  secs = Number(secs) || 0;
-  const parts = [];
-  if(mins) parts.push(`${mins}m`);
-  if(secs) parts.push(`${secs}s`);
-  if(parts.length === 0) return '0s';
-  return parts.join(' ');
-}
-function buildScheduleSummaryHtml(schedule) {
-  if (!schedule) return '';
-  let day = schedule.day;
-  if (typeof day === "number" || (!isNaN(Number(day)) && String(day).length > 0)) day = dayIntToName(Number(day));
-  const time = schedule.time ? schedule.time : (typeof schedule.hour !== "undefined" ? (String(schedule.hour).padStart(2,'0') + ':' + String(schedule.minute || 0).padStart(2,'0')) : '-');
-  const dur = (typeof schedule.duration_seconds !== 'undefined')
-    ? formatDuration(schedule.duration_min || Math.floor(schedule.duration_seconds/60), schedule.duration_sec || (schedule.duration_seconds % 60))
-    : (schedule.duration ? String(schedule.duration) + 'm' : '-');
-  const safeDay = escapeHtml(day || '-');
-  const safeTime = escapeHtml(time || '-');
-  const safeDur = escapeHtml(dur || '-');
-  return `<div class="notif-item" style="background:#f7fff7;border-radius:8px;margin-bottom:6px;padding:10px;">
-            <div class="left">
-              <div><strong>Current Fertilizer Schedule</strong></div>
-              <div style="color:#444; margin-top:6px;">Day: ${safeDay} · Time: ${safeTime} · Dur: ${safeDur}</div>
-              <div class="time" style="margin-top:6px;">(from saved schedule)</div>
-            </div>
-          </div>`;
-}
-
-/* Render notification panel with delete buttons and "Clear All"
-   — Modified to display current fertilizer schedule summary (from localStorage) at top */
-function updateNotifDisplay(){
-  notifList = getNotifHistory();
-  const schedule = getStoredFertilizerSchedule();
-  let html = '';
-
-  if (schedule && schedule.day) {
-    html += buildScheduleSummaryHtml(schedule);
-  }
-
-  if (notifList.length > 0) {
-    // topbar with Clear All (we keep it after the schedule summary)
-    html += `<div class="topbar"><strong>Notifications</strong><button id="clearAllBtn" class="clear-all">Clear All</button></div>`;
-    // render newest first
-    for(let i = notifList.length - 1; i >= 0; i--) {
-      const n = notifList[i];
-      const safeType = escapeHtml(n.type || 'Notification');
-      const safeDetail = n.detail ? ` — ${escapeHtml(n.detail)}` : '';
-      const safeTime = escapeHtml(n.time || '');
-      // store data-index as original index i
-      html += `<div class="notif-item" data-index="${i}">
-                 <div class="left">
-                   <div><strong>${safeType}</strong>${safeDetail}</div>
-                   <div class="time">${safeTime}</div>
-                 </div>
-                 <div>
-                   <button class="delete-btn" data-index="${i}" aria-label="Delete notification">Delete</button>
-                 </div>
-               </div>`;
-    }
-    notifPanel.innerHTML = html;
-
-    // attach handlers: delegated click for delete & clear-all
-    const clearAllBtn = document.getElementById('clearAllBtn');
-    if (clearAllBtn) {
-      clearAllBtn.onclick = () => {
-        if(!confirm('Clear all notifications?')) return;
-        clearAllNotifications();
-      };
-    }
-
-    // delete buttons - use event delegation instead of per-button to be safe
-    notifPanel.querySelectorAll('.delete-btn').forEach(btn => {
-      btn.addEventListener('click', (ev) => {
-        ev.stopPropagation();
-        const idx = Number(btn.getAttribute('data-index'));
-        deleteNotificationAt(idx);
-      });
-    });
-
-  } else {
-    if (schedule && schedule.day) {
-      html += '<div style="color:#aaa;padding:12px 0 20px 0;text-align:center;">No other notifications.</div>';
-      notifPanel.innerHTML = html;
-    } else {
-      notifPanel.innerHTML = '<div style="color:#aaa;padding:20px 0;text-align:center;">No notifications.</div>';
-    }
-  }
-}
-
 /* Clicking the bell toggles panel; when opening clear unread count */
 notifBell.addEventListener("click", (e)=>{
   panelShown = !panelShown;
   notifPanel.classList.toggle("active", panelShown);
   if(panelShown){
-    // refresh display (will include saved schedule)
-    updateNotifDisplay();
     // clear unread count when user opens / clicks
     setUnreadCount(0);
+    // Ensure panel reflect latest schedule info
+    updateNotifDisplay();
   }
 });
 /* close panel when clicking outside */
@@ -743,11 +729,20 @@ window.addEventListener("DOMContentLoaded", ()=>{
 });
 
 /* -------------------------
-   Latest Schedule toast/pill (kept for optional UI, not used for notifications)
+   Latest Schedule toast/pill
    ------------------------- */
 const latestScheduleToast = document.getElementById("latestScheduleToast"); // optional element (may be null)
 let latestSchedule = null;
 
+function formatDuration(mins, secs) {
+  mins = Number(mins) || 0;
+  secs = Number(secs) || 0;
+  const parts = [];
+  if(mins) parts.push(`${mins}m`);
+  if(secs) parts.push(`${secs}s`);
+  if(parts.length === 0) return '0s';
+  return parts.join(' ');
+}
 function showLatestScheduleToast(schedule, opts={autoHide: true, timeout:6000}) {
   latestSchedule = schedule;
   const durLabel = schedule.duration_seconds != null
@@ -778,10 +773,14 @@ client.on('connect', ()=>{
   document.getElementById('connDot').style.background='#4caf50';
   document.getElementById('connText').innerText='Connected';
 
-  // publish pending schedule if present (do NOT create notification entries here; schedule is presented in the bell)
+  // publish pending schedule if present
   if (window.pendingSchedule) {
     client.publish("ttgo/fertilizer_schedule", JSON.stringify(window.pendingSchedule));
-    // intentionally do not call notify/showLatestScheduleToast for schedule publish
+    try { notify('Schedule Published', new Date().toLocaleString(), JSON.stringify(window.pendingSchedule)); } catch(e){console.error(e);}
+    try{
+      const ps = window.pendingSchedule;
+      showLatestScheduleToast({day:ps.day, time:ps.time, duration_seconds:ps.duration_seconds, duration_min:ps.duration_min, duration_sec:ps.duration_sec});
+    }catch(e){}
     window.pendingSchedule = null;
   } else {
     // If there is a stored schedule, publish it (converted to duration_seconds)
@@ -789,7 +788,8 @@ client.on('connect', ()=>{
     if(stored && stored.day && stored.time){
       const sch = toSchedulePayload(stored);
       client.publish("ttgo/fertilizer_schedule", JSON.stringify(sch));
-      // do NOT create notification history entry for schedule; schedule will appear in bell summary
+      try { notify('Schedule Published', new Date().toLocaleString(), `Day:${sch.day} Time:${sch.time} Dur:${formatDuration(sch.duration_min, sch.duration_sec)}`); } catch(e){console.error(e);}
+      showLatestScheduleToast(sch);
     }
   }
 });
@@ -875,9 +875,7 @@ function toSchedulePayload(formData){
   };
 }
 
-/* changed Save -> Update behavior: update existing stored schedule object (admin only)
-   Per your request: DO NOT add schedule entries to notification history here.
-*/
+/* changed Save -> Update behavior: update existing stored schedule object (admin only) */
 saveBtn.addEventListener("click", ()=>{
   if(role !== "admin") return;
   // read minutes and seconds inputs
@@ -894,14 +892,21 @@ saveBtn.addEventListener("click", ()=>{
   localStorage.setItem("fertilizerSchedule", JSON.stringify(schedule));
   publishSchedule(schedule);
   updateCountdown();
-  // Do NOT notify/historize schedule updates (schedule is visible in the bell)
+  notify('Schedule Updated', new Date().toLocaleString(), `Day:${schedule.day} Time:${schedule.time} Dur:${formatDuration(schedule.duration_min, schedule.duration_sec)}`);
+  showLatestScheduleToast(schedule);
+
+  // When schedule is saved, also update the notif panel (so the new current schedule appears immediately)
+  updateNotifDisplay();
 });
 
 function publishSchedule(schedule){
   if(role !== "admin") return;
   if(client.connected){
     client.publish("ttgo/fertilizer_schedule", JSON.stringify(schedule));
-    // Do not create notification history entry for schedule publish
+    try { notify('Schedule Updated', new Date().toLocaleString(), `Day:${schedule.day} Time:${schedule.time} Dur:${formatDuration(schedule.duration_min, schedule.duration_sec)}`); } catch(e){console.error(e);}
+    showLatestScheduleToast(schedule);
+    // update notification display so the current schedule in the bell is up-to-date
+    updateNotifDisplay();
   } else {
     window.pendingSchedule = schedule;
     console.warn("⚠️ MQTT not connected. Schedule will send on reconnect.");
@@ -910,85 +915,52 @@ function publishSchedule(schedule){
 
 /* handle incoming messages */
 client.on("message", (topic, msg) => {
-  try {
-    const payload = msg.toString();
+  if(topic === "ttgo/fertilizer_schedule"){
+    try {
+      const schedule = JSON.parse(msg.toString());
+      if(schedule.day) fertDay.value = schedule.day;
+      if(schedule.time) fertTime.value = schedule.time;
 
-    // Handle retained schedule state published by ESP (ttgo/fertilizer_schedule/state)
-    if(topic === "ttgo/fertilizer_schedule/state"){
-      try {
-        const parsed = JSON.parse(payload);
-        // if the retained payload contains schedules array, pick the first (or convert as needed)
-        if(parsed && Array.isArray(parsed.schedules) && parsed.schedules.length > 0){
-          const s = parsed.schedules[0];
-          const out = {
-            day: (typeof s.day === "number") ? dayIntToName(s.day) : (s.day || ''),
-            time: (typeof s.hour !== "undefined") ? String(s.hour).padStart(2,'0') + ':' + String(s.minute||0).padStart(2,'0') : (s.time || ''),
-            duration_seconds: s.duration_seconds || s.duration || 0,
-            duration_min: Math.floor((s.duration_seconds||s.duration||0)/60),
-            duration_sec: (s.duration_seconds||s.duration||0) % 60
-          };
-          localStorage.setItem("fertilizerSchedule", JSON.stringify(out));
-          // Do NOT create notification entry for schedule state; it is shown in the bell summary
-          // Update UI inputs to reflect the saved schedule
-          try {
-            if(out.day) fertDay.value = out.day;
-            if(out.time) fertTime.value = out.time;
-            if(typeof out.duration_seconds !== "undefined"){
-              fertDurationMin.value = out.duration_min;
-              fertDurationSec.value = out.duration_sec;
-            }
-            updateCountdown();
-            updateNotifDisplay(); // refresh bell summary
-          } catch(e){}
-        }
-      } catch(e){
-        console.error("Failed to parse fertilizer_schedule/state payload", e);
+      // Accept either duration_seconds OR duration_min/duration_sec OR legacy duration field
+      if(typeof schedule.duration_seconds !== "undefined"){
+        const total = Number(schedule.duration_seconds) || 0;
+        fertDurationMin.value = Math.floor(total/60);
+        fertDurationSec.value = total % 60;
+      } else if(typeof schedule.duration_min !== "undefined" || typeof schedule.duration_sec !== "undefined"){
+        if(typeof schedule.duration_min !== "undefined") fertDurationMin.value = schedule.duration_min;
+        if(typeof schedule.duration_sec !== "undefined") fertDurationSec.value = schedule.duration_sec;
+      } else if(typeof schedule.duration !== "undefined"){
+        // legacy: duration in minutes
+        fertDurationMin.value = Math.floor(Number(schedule.duration) || 0);
+        fertDurationSec.value = 0;
       }
-      return;
-    }
 
-    if(topic === "ttgo/fertilizer_schedule"){
-      try {
-        const schedule = JSON.parse(payload);
-        if(schedule.day) fertDay.value = schedule.day;
-        if(schedule.time) fertTime.value = schedule.time;
+      updateCountdown();
+      // store as new unified format (duration_seconds + split)
+      const mins = Number(fertDurationMin.value) || 0;
+      const secs = Number(fertDurationSec.value) || 0;
+      const unified = { day: fertDay.value, time: fertTime.value, duration_seconds: mins*60 + secs, duration_min: mins, duration_sec: secs };
+      localStorage.setItem("fertilizerSchedule", JSON.stringify(unified));
+      notify('Schedule Received', new Date().toLocaleString(), `Day:${unified.day || '-'} Time:${unified.time || '-'} Dur:${formatDuration(unified.duration_min, unified.duration_sec)}`);
+      showLatestScheduleToast(unified);
 
-        // Accept either duration_seconds OR duration_min/duration_sec OR legacy duration field
-        if(typeof schedule.duration_seconds !== "undefined"){
-          const total = Number(schedule.duration_seconds) || 0;
-          fertDurationMin.value = Math.floor(total/60);
-          fertDurationSec.value = total % 60;
-        } else if(typeof schedule.duration_min !== "undefined" || typeof schedule.duration_sec !== "undefined"){
-          if(typeof schedule.duration_min !== "undefined") fertDurationMin.value = schedule.duration_min;
-          if(typeof schedule.duration_sec !== "undefined") fertDurationSec.value = schedule.duration_sec;
-        } else if(typeof schedule.duration !== "undefined"){
-          // legacy: duration in minutes
-          fertDurationMin.value = Math.floor(Number(schedule.duration) || 0);
-          fertDurationSec.value = 0;
-        }
+      // update notif panel to show the newly received schedule as the "Current Fertilizer Schedule"
+      updateNotifDisplay();
+    } catch(e){ console.error(e); }
+    return;
+  }
+  if(topic === "ttgo/notifications"){
+    try {
+      const notif = JSON.parse(msg.toString());
+      notify(notif.type || 'Notification', notif.time || new Date().toLocaleString(), notif.detail || '');
+      updateNotifDisplay();
+    } catch(e){ console.error(e); }
+    return;
+  }
 
-        updateCountdown();
-        // store as new unified format (duration_seconds + split)
-        const mins = Number(fertDurationMin.value) || 0;
-        const secs = Number(fertDurationSec.value) || 0;
-        const unified = { day: fertDay.value, time: fertTime.value, duration_seconds: mins*60 + secs, duration_min: mins, duration_sec: secs };
-        localStorage.setItem("fertilizerSchedule", JSON.stringify(unified));
-        // Do NOT create notification history entries for schedule reception (schedule visible in bell summary)
-        updateNotifDisplay(); // refresh panel so the schedule summary updates immediately
-      } catch(e){ console.error(e); }
-      return;
-    }
-
-    if(topic === "ttgo/notifications"){
-      try {
-        const notif = JSON.parse(payload);
-        notify(notif.type || 'Notification', notif.time || new Date().toLocaleString(), notif.detail || '');
-      } catch(e){ console.error(e); }
-      return;
-    }
-
-    /* Otherwise assume sensor data and pump states */
-    const d = JSON.parse(payload);
+  /* Otherwise assume sensor data and pump states */
+  try {
+    const d = JSON.parse(msg.toString());
 
     // Soil
     const soilAvg = Number(d.soil_avg ?? d.soil ?? 0);
@@ -1238,3 +1210,4 @@ window._debug = {
 </script>
 </body>
 </html>
+butang og set schedule sa notification bell
