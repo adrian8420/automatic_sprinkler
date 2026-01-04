@@ -252,7 +252,7 @@ canvas { display:block; }
   background: #0b84d4; color: #fff; border: none; border-radius: 7px; padding:8px 28px; font-size: 17px; font-weight: 700; margin-top: 16px; cursor: pointer;
 }
 #userLoginBtn { display:block; width:100%; margin-top:12px; }
-#loginBox button:active,#userLoginBtn:active { transform: translateY(2px);}
+#loginBox button:active,#userLoginBtn:active { transform: translateY(2px); }
 #loginMsg { color:#e53935; font-size:13px; margin-top:10px; min-height:24px; }
 
 /* Minimize space between fertilizing, phone, and banner */
@@ -286,7 +286,6 @@ canvas { display:block; }
       <button type="submit">Login</button>
       <div id="loginMsg"></div>
       <div style="margin:10px 0 14px 0; color:#888; font-size:12px;">
-        admin / adminpass
       </div>
     </form>
     <hr style="margin:12px 0 15px 0; border:none; border-top:1.5px solid #f0f0f0; width:83%;">
@@ -492,18 +491,70 @@ const displayPhone = document.getElementById("displayPhone");
 
 function getStoredPhone(){ return localStorage.getItem(PHONE_KEY) || ""; }
 function setStoredPhone(num){ localStorage.setItem(PHONE_KEY, num); }
-function refreshPhoneDisplay(){ const val = getStoredPhone(); displayPhone.textContent = val ? val : "—"; phoneInput.value = val; }
+
+/* 
+  UPDATED: Prefill with +63 if empty and normalize on submit.
+  When admin updates, publish to MQTT topic "ttgo/phone_number" with retain=true
+  so the ESP can receive it even if it reconnects later.
+*/
+function refreshPhoneDisplay(){
+  const val = getStoredPhone();
+  displayPhone.textContent = val ? val : "—";
+  // If no saved phone, prefill with +63 as requested
+  phoneInput.value = val ? val : "+63";
+}
 refreshPhoneDisplay();
 
 phoneForm.addEventListener("submit", function(e){
   e.preventDefault();
   if(role !== "admin") return;
-  const num = phoneInput.value.trim();
-  const re = /^\+?\d{9,16}$/;
-  if(!re.test(num)) { phoneMsg.textContent = "Invalid phone number format"; return; }
+
+  let num = phoneInput.value.trim();
+
+  // Reject if user left only "+63" or empty
+  if(num === "" || num === "+63"){
+    phoneMsg.textContent = "Please enter a valid phone number after +63";
+    return;
+  }
+
+  // Normalize:
+  // - If starts with 0 (e.g., 0917...), convert to +63...
+  // - If starts with '+' keep it
+  // - If digits only (no +), assume local and prefix +63
+  if(!num.startsWith('+')){
+    if(num.startsWith('0')){
+      num = '+63' + num.slice(1);
+    } else {
+      // digits without leading 0 or + -> assume local
+      num = '+63' + num;
+    }
+  }
+
+  // Final validation: + followed by 9-16 digits (E.164-ish)
+  const re = /^\+\d{9,16}$/;
+  if(!re.test(num)) {
+    phoneMsg.textContent = "Invalid phone number format";
+    return;
+  }
+
+  // Save locally
   setStoredPhone(num);
   phoneMsg.textContent = "Phone updated!";
   refreshPhoneDisplay();
+
+  // Publish to MQTT so the ESP receives the updated number.
+  // Use retained message so device receives it on reconnect.
+  try {
+    if (typeof client !== 'undefined' && client && client.connected) {
+      client.publish("ttgo/phone_number", num, { qos: 1, retain: true });
+    } else {
+      // If MQTT not connected in the dashboard, still save locally.
+      console.warn("MQTT client not connected — phone saved locally only");
+    }
+  } catch (err) {
+    console.warn("MQTT publish failed:", err);
+  }
+
   setTimeout(()=>{ phoneMsg.textContent=""; }, 1800);
 });
 
@@ -995,7 +1046,18 @@ document.getElementById('exportBtn').addEventListener('click', ()=>{
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.aoa_to_sheet([ ['Timestamp','Soil %','Temp °C','Water cm','Fertilizer cm','Relay1','Relay2'], ...storedRows ]);
   XLSX.utils.book_append_sheet(wb, ws, 'Sensor Data');
-  XLSX.writeFile(wb, 'sensor_data.xlsx');
+
+  // filename format requested: data_DD-MM-YY_HH-MM.xlsx
+  const now = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  const dd = pad(now.getDate());
+  const mm = pad(now.getMonth() + 1);
+  const yy = String(now.getFullYear()).slice(-2);
+  const HH = pad(now.getHours());
+  const MM = pad(now.getMinutes());
+  const filename = `data_${dd}-${mm}-${yy}_${HH}-${MM}.xlsx`;
+
+  XLSX.writeFile(wb, filename);
 });
 
 /* -------------------------
@@ -1011,7 +1073,16 @@ function performAutoExport(){
     return;
   }
   try {
-    const filename = 'sensor_data_' + new Date().toISOString().slice(0,10) + '.xlsx';
+    // Use same filename format as manual export: data_DD-MM-YY_HH-MM.xlsx
+    const now = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    const dd = pad(now.getDate());
+    const mm = pad(now.getMonth() + 1);
+    const yy = String(now.getFullYear()).slice(-2);
+    const HH = pad(now.getHours());
+    const MM = pad(now.getMinutes());
+    const filename = `data_${dd}-${mm}-${yy}_${HH}-${MM}.xlsx`;
+
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.aoa_to_sheet([ ['Timestamp','Soil %','Temp °C','Water cm','Fertilizer cm','Relay1','Relay2'], ...storedRows ]);
     XLSX.utils.book_append_sheet(wb, ws, 'Sensor Data');
