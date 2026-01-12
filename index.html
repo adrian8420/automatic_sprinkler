@@ -493,11 +493,14 @@ function getStoredPhone(){ return localStorage.getItem(PHONE_KEY) || ""; }
 function setStoredPhone(num){ localStorage.setItem(PHONE_KEY, num); }
 
 /* 
-  Prefill with +63 if empty and normalize on submit.
+  UPDATED: Prefill with +63 if empty and normalize on submit.
+  When admin updates, publish to MQTT topic "ttgo/phone_number" with retain=true
+  so the ESP can receive it even if it reconnects later.
 */
 function refreshPhoneDisplay(){
   const val = getStoredPhone();
   displayPhone.textContent = val ? val : "—";
+  // If no saved phone, prefill with +63 as requested
   phoneInput.value = val ? val : "+63";
 }
 refreshPhoneDisplay();
@@ -508,33 +511,44 @@ phoneForm.addEventListener("submit", function(e){
 
   let num = phoneInput.value.trim();
 
+  // Reject if user left only "+63" or empty
   if(num === "" || num === "+63"){
     phoneMsg.textContent = "Please enter a valid phone number after +63";
     return;
   }
 
+  // Normalize:
+  // - If starts with 0 (e.g., 0917...), convert to +63...
+  // - If starts with '+' keep it
+  // - If digits only (no +), assume local and prefix +63
   if(!num.startsWith('+')){
     if(num.startsWith('0')){
       num = '+63' + num.slice(1);
     } else {
+      // digits without leading 0 or + -> assume local
       num = '+63' + num;
     }
   }
 
+  // Final validation: + followed by 9-16 digits (E.164-ish)
   const re = /^\+\d{9,16}$/;
   if(!re.test(num)) {
     phoneMsg.textContent = "Invalid phone number format";
     return;
   }
 
+  // Save locally
   setStoredPhone(num);
   phoneMsg.textContent = "Phone updated!";
   refreshPhoneDisplay();
 
+  // Publish to MQTT so the ESP receives the updated number.
+  // Use retained message so device receives it on reconnect.
   try {
     if (typeof client !== 'undefined' && client && client.connected) {
       client.publish("ttgo/phone_number", num, { qos: 1, retain: true });
     } else {
+      // If MQTT not connected in the dashboard, still save locally.
       console.warn("MQTT client not connected — phone saved locally only");
     }
   } catch (err) {
@@ -556,7 +570,7 @@ function renderPhoneUI(){
 }
 
 /* -------------------------
-   Notifications
+   Notifications (history + unread count + badge + delete)
    ------------------------- */
 
 function getNotifHistory() {
@@ -585,15 +599,19 @@ function updateNotifBadge(){
   }
 }
 
+/* Render notification panel with delete buttons and "Clear All" */
 function updateNotifDisplay(){
   notifList = getNotifHistory();
   if (notifList.length > 0) {
+    // topbar with Clear All
     let html = `<div class="topbar"><strong>Notifications</strong><button id="clearAllBtn" class="clear-all">Clear All</button></div>`;
+    // render newest first
     for(let i = notifList.length - 1; i >= 0; i--) {
       const n = notifList[i];
       const safeType = escapeHtml(n.type || 'Notification');
       const safeDetail = n.detail ? ` — ${escapeHtml(n.detail)}` : '';
       const safeTime = escapeHtml(n.time || '');
+      // store data-index as original index i
       html += `<div class="notif-item" data-index="${i}">
                  <div class="left">
                    <div><strong>${safeType}</strong>${safeDetail}</div>
@@ -605,6 +623,8 @@ function updateNotifDisplay(){
                </div>`;
     }
     notifPanel.innerHTML = html;
+
+    // attach handlers: delegated click for delete & clear-all
     const clearAllBtn = document.getElementById('clearAllBtn');
     if (clearAllBtn) {
       clearAllBtn.onclick = () => {
@@ -612,6 +632,8 @@ function updateNotifDisplay(){
         clearAllNotifications();
       };
     }
+
+    // delete buttons - use event delegation instead of per-button to be safe
     notifPanel.querySelectorAll('.delete-btn').forEach(btn => {
       btn.addEventListener('click', (ev) => {
         ev.stopPropagation();
@@ -625,8 +647,10 @@ function updateNotifDisplay(){
   }
 }
 
+/* safe simple html escape */
 function escapeHtml(s){ return String(s).replace(/[&<>"']/g, function(m){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"})[m]; }); }
 
+/* add to history (no unread increment here) */
 function addNotifToHistory(type, time, detail) {
   let list = getNotifHistory();
   list.push({ type, time, detail });
@@ -635,6 +659,11 @@ function addNotifToHistory(type, time, detail) {
   return list;
 }
 
+/*
+ Modified notify:
+ - opts.daily (default true): enable daily suppression per type
+ - opts.force (default false): bypass suppression and always notify
+*/
 function notify(type, time, detail, opts = { daily: true, force: false }) {
   try {
     const doDaily = (opts.daily !== false);
@@ -642,31 +671,40 @@ function notify(type, time, detail, opts = { daily: true, force: false }) {
 
     if (doDaily && !force) {
       if (hasNotifiedToday(type)) {
+        // already sent today for this type -> skip adding again
         console.debug(`Notification skipped (already sent today): ${type}`);
         return;
       }
+      // mark now so that concurrent calls won't duplicate
       markNotifiedToday(type);
     }
 
+    // add to history
     addNotifToHistory(type, time, detail);
+    // increment unread
     const newCount = getUnreadCount() + 1;
     setUnreadCount(newCount);
+    // update panel UI
     updateNotifDisplay();
   } catch (err) {
     console.error("notify() failed", err);
   }
 }
 
+/* Delete a specific notification by original index */
 function deleteNotificationAt(index) {
   try {
     let list = getNotifHistory();
     if (index < 0 || index >= list.length) return;
     list.splice(index, 1);
     saveNotifHistory(list);
+    // If panel is shown, keep it shown and update display
     updateNotifDisplay();
+    // unread count stays same (panel open clears it). If you prefer adjusting unread, implement logic here.
   } catch (e) { console.error(e); }
 }
 
+/* Clear all notifications */
 function clearAllNotifications() {
   try {
     localStorage.setItem(LOCALSTORAGE_NOTIF, JSON.stringify([]));
@@ -675,19 +713,24 @@ function clearAllNotifications() {
   } catch(e) { console.error(e); }
 }
 
+/* Clicking the bell toggles panel; when opening clear unread count */
 notifBell.addEventListener("click", (e)=>{
   panelShown = !panelShown;
   notifPanel.classList.toggle("active", panelShown);
   if(panelShown){
+    // clear unread count when user opens / clicks
     setUnreadCount(0);
   }
 });
+/* close panel when clicking outside */
 document.addEventListener("click", e=>{
   if(!notifBell.contains(e.target) && !notifPanel.contains(e.target)){
     notifPanel.classList.remove("active");
     panelShown = false;
   }
 });
+
+/* initialize notification UI on DOMContentLoaded */
 window.addEventListener("DOMContentLoaded", ()=>{
   notifList = getNotifHistory();
   updateNotifDisplay();
@@ -715,7 +758,7 @@ function showLatestScheduleToast(schedule, opts={autoHide: true, timeout:6000}) 
     ? formatDuration(schedule.duration_min || Math.floor(schedule.duration_seconds/60), schedule.duration_sec || (schedule.duration_seconds % 60))
     : (schedule.duration ? String(schedule.duration) : '-');
   const txt = `Latest Schedule — Day: ${schedule.day || '-'} · Time: ${schedule.time || '-'} · Dur: ${durLabel}`;
-  if (!latestScheduleToast) return;
+  if (!latestScheduleToast) return; // safe if element absent
   latestScheduleToast.innerHTML = `<span>${escapeHtml(txt)}</span> <button class="closeBtn" aria-label="Close latest schedule">✕</button>`;
   latestScheduleToast.style.display = "block";
   const closeBtn = latestScheduleToast.querySelector(".closeBtn");
@@ -729,25 +772,15 @@ function showLatestScheduleToast(schedule, opts={autoHide: true, timeout:6000}) 
 /* -------------------------
    MQTT, Charts, Gauges, Data storage
    ------------------------- */
-/* Connect via WebSocket to flespi (same token used in your device) */
 const client = mqtt.connect('wss://mqtt.flespi.io:443',{username:'FlespiToken QGE7NyfGF3wfQDIaFbtlRbIAtNISsgmCRziAPBk6qcEbCKmE6Z4DnraLRnEKds8f'});
 
 /* state-tracking for pumps to notify only on changes */
-let lastRelay1State = null; // boolean: true=ON, false=OFF, null=unknown
+let lastRelay1State = null;
 let lastRelay2State = null;
 
-/* Subscribe and publish flow */
 client.on('connect', ()=>{
   document.getElementById('connDot').style.background='#4caf50';
   document.getElementById('connText').innerText='Connected';
-
-  // Subscribe to sensor + relay + other topics
-  // Ensure we receive relay updates published every 5s separately
-  client.subscribe('ttgo/all_sensors', { qos: 0 });
-  client.subscribe('ttgo/relay1_status', { qos: 1 });
-  client.subscribe('ttgo/relay2_status', { qos: 1 });
-  client.subscribe('ttgo/fertilizer_schedule/state', { qos: 1 });
-  client.subscribe('ttgo/notifications', { qos: 1 });
 
   // publish pending schedule if present
   if (window.pendingSchedule) {
@@ -759,6 +792,7 @@ client.on('connect', ()=>{
     }catch(e){}
     window.pendingSchedule = null;
   } else {
+    // If there is a stored schedule, publish it (converted to duration_seconds)
     const stored = readSavedSchedule();
     if(stored && stored.day && stored.time){
       const sch = toSchedulePayload(stored);
@@ -768,6 +802,10 @@ client.on('connect', ()=>{
     }
   }
 });
+
+client.subscribe('ttgo/all_sensors');
+client.subscribe('ttgo/fertilizer_schedule/state', { qos: 1 });
+client.subscribe('ttgo/notifications');
 
 /* --- Pump controls --- */
 const pump1OnBtn = document.getElementById("pump1OnBtn");
@@ -794,6 +832,7 @@ if(saved && saved.day) {
   try {
     fertDay.value = saved.day || fertDay.value;
     fertTime.value = saved.time || "";
+    // support both older format and new: if saved.duration_seconds exists use it
     if(typeof saved.duration_seconds !== "undefined"){
       const total = Number(saved.duration_seconds) || 0;
       const mins = Math.floor(total/60);
@@ -801,9 +840,11 @@ if(saved && saved.day) {
       fertDurationMin.value = mins;
       fertDurationSec.value = secs;
     } else {
+      // older values: duration_min/duration_sec or duration (minutes)
       if(typeof saved.duration_min !== "undefined") fertDurationMin.value = saved.duration_min;
       if(typeof saved.duration_sec !== "undefined") fertDurationSec.value = saved.duration_sec;
       if(typeof saved.duration !== "undefined" && saved.duration !== "") {
+        // assume minutes
         fertDurationMin.value = Math.floor(Number(saved.duration));
       }
     }
@@ -829,6 +870,7 @@ function updateCountdown(){
 updateCountdown();
 setInterval(updateCountdown, 60000);
 
+/* Build schedule payload that includes duration_seconds and a human-friendly split */
 function toSchedulePayload(formData){
   const mins = Math.max(0, Number(formData.duration_min || formData.durationMin || formData.durationMinutes || formData.duration_minute || 0));
   const secs = Math.max(0, Number(formData.duration_sec || formData.durationSec || formData.durationSeconds || formData.duration_second || 0));
@@ -842,11 +884,13 @@ function toSchedulePayload(formData){
   };
 }
 
+/* changed Save -> Update behavior: update existing stored schedule object (admin only) */
 saveBtn.addEventListener("click", ()=>{
   if(role !== "admin") return;
+  // read minutes and seconds inputs
   const mins = Math.max(0, Math.floor(Number(fertDurationMin.value) || 0));
   let secs = Math.max(0, Math.floor(Number(fertDurationSec.value) || 0));
-  if(secs > 59) { secs = secs % 60; }
+  if(secs > 59) { secs = secs % 60; } // normalize if user entered >59
   const schedule = {
     day: fertDay.value,
     time: fertTime.value,
@@ -875,45 +919,13 @@ function publishSchedule(schedule){
 
 /* handle incoming messages */
 client.on("message", (topic, msg) => {
-
-  // Handle fast relay1 status topic
-  if(topic === "ttgo/relay1_status"){
-    try {
-      const s = msg.toString().trim();
-      const relay1On = (s === "ON");
-      const relay1Badge = document.getElementById('relay1Badge');
-      relay1Badge.className = 'pump-badge ' + (relay1On ? 'ok' : 'bad');
-      relay1Badge.innerText = relay1On ? 'ON' : 'OFF';
-      setPump1ButtonState(relay1On ? "ON" : "OFF");
-      if (lastRelay1State === null || lastRelay1State !== relay1On) {
-        notify('Pump1', new Date().toLocaleString(), relay1On ? 'ON' : 'OFF', { daily: false });
-        lastRelay1State = relay1On;
-      }
-    } catch(e){ console.error(e); }
-    return;
-  }
-
-  // Handle fast relay2 status topic
-  if(topic === "ttgo/relay2_status"){
-    try {
-      const s = msg.toString().trim();
-      const relay2On = (s === "ON");
-      const relay2Badge = document.getElementById('relay2Badge');
-      relay2Badge.className = 'pump-badge ' + (relay2On ? 'ok' : 'bad');
-      relay2Badge.innerText = relay2On ? 'ON' : 'OFF';
-      if (lastRelay2State === null || lastRelay2State !== relay2On) {
-        notify('Pump2', new Date().toLocaleString(), relay2On ? 'ON' : 'OFF', { daily: false });
-        lastRelay2State = relay2On;
-      }
-    } catch(e){ console.error(e); }
-    return;
-  }
-
   if(topic === "ttgo/fertilizer_schedule"){
     try {
       const schedule = JSON.parse(msg.toString());
       if(schedule.day) fertDay.value = schedule.day;
       if(schedule.time) fertTime.value = schedule.time;
+
+      // Accept either duration_seconds OR duration_min/duration_sec OR legacy duration field
       if(typeof schedule.duration_seconds !== "undefined"){
         const total = Number(schedule.duration_seconds) || 0;
         fertDurationMin.value = Math.floor(total/60);
@@ -922,10 +934,13 @@ client.on("message", (topic, msg) => {
         if(typeof schedule.duration_min !== "undefined") fertDurationMin.value = schedule.duration_min;
         if(typeof schedule.duration_sec !== "undefined") fertDurationSec.value = schedule.duration_sec;
       } else if(typeof schedule.duration !== "undefined"){
+        // legacy: duration in minutes
         fertDurationMin.value = Math.floor(Number(schedule.duration) || 0);
         fertDurationSec.value = 0;
       }
+
       updateCountdown();
+      // store as new unified format (duration_seconds + split)
       const mins = Number(fertDurationMin.value) || 0;
       const secs = Number(fertDurationSec.value) || 0;
       const unified = { day: fertDay.value, time: fertTime.value, duration_seconds: mins*60 + secs, duration_min: mins, duration_sec: secs };
@@ -935,7 +950,6 @@ client.on("message", (topic, msg) => {
     } catch(e){ console.error(e); }
     return;
   }
-
   if(topic === "ttgo/notifications"){
     try {
       const notif = JSON.parse(msg.toString());
@@ -944,7 +958,7 @@ client.on("message", (topic, msg) => {
     return;
   }
 
-  /* Otherwise assume sensor data (ttgo/all_sensors) */
+  /* Otherwise assume sensor data and pump states */
   try {
     const d = JSON.parse(msg.toString());
 
@@ -985,26 +999,34 @@ client.on("message", (topic, msg) => {
     chartFert.data.labels.push(now); chartFert.data.datasets[0].data.push(fertCm);
     if(chartFert.data.labels.length>50){ chartFert.data.labels.shift(); chartFert.data.datasets[0].data.shift(); } chartFert.update();
 
-    // Relays — fallback: if the sensor message contains relay fields, use them
+    // Relays/pumps - detect state changes and notify per ON/OFF every time
     let relay1Badge = document.getElementById('relay1Badge');
     let relay2Badge = document.getElementById('relay2Badge');
 
-    if (typeof d.relay1 !== "undefined" && d.relay1 !== null && d.relay1 !== "") {
-      const relay1On = String(d.relay1) === "ON";
+    // Relay1 handling
+    if (typeof d.relay1 === "undefined" || d.relay1 === null || d.relay1 === "") {
+      relay1Badge.className = 'pump-badge muted'; relay1Badge.innerText = '—';
+    } else {
+      const relay1On = d.relay1 === "ON";
       relay1Badge.className = 'pump-badge ' + (relay1On ? 'ok' : 'bad'); relay1Badge.innerText = relay1On ? 'ON' : 'OFF';
       setPump1ButtonState(relay1On ? "ON" : "OFF");
+      // Notify ON/OFF on change (every change)
       if (lastRelay1State === null || lastRelay1State !== relay1On) {
         notify('Pump1', new Date().toLocaleString(), relay1On ? 'ON' : 'OFF', { daily: false });
         lastRelay1State = relay1On;
       }
     }
 
-    if (typeof d.relay2 !== "undefined" && d.relay2 !== null && d.relay2 !== "") {
-      const relay2On = String(d.relay2) === "ON";
-      relay2Badge.className = 'pump-badge ' + (relay2On ? 'ok' : 'bad'); relay2Badge.innerText = relay2On ? 'ON' : 'OFF';
-      if (lastRelay2State === null || lastRelay2State !== relay2On) {
-        notify('Pump2', new Date().toLocaleString(), relay2On ? 'ON' : 'OFF', { daily: false });
-        lastRelay2State = relay2On;
+    // Relay2 handling
+    if (typeof d.relay2 === "undefined" || d.relay2 === null || d.relay2 === "") {
+      relay2Badge.className = 'pump-badge muted'; relay2Badge.innerText = '—';
+    } else {
+      const relay2Fertilizing = d.relay2 === "Fertilizing";
+      relay2Badge.className = 'pump-badge ' + (relay2Fertilizing ? 'ok' : 'bad'); relay2Badge.innerText = relay2Fertilizing ? 'Fertilizing' : 'Waiting';
+      // Notify on change
+      if (lastRelay2State === null || lastRelay2State !== relay2Fertilizing) {
+        notify('Pump2', new Date().toLocaleString(), relay2Fertilizing ? 'Fertilizing' : 'Waiting', { daily: false });
+        lastRelay2State = relay2Fertilizing;
       }
     }
 
@@ -1025,6 +1047,7 @@ document.getElementById('exportBtn').addEventListener('click', ()=>{
   const ws = XLSX.utils.aoa_to_sheet([ ['Timestamp','Soil %','Temp °C','Water cm','Fertilizer cm','Relay1','Relay2'], ...storedRows ]);
   XLSX.utils.book_append_sheet(wb, ws, 'Sensor Data');
 
+  // filename format requested: data_DD-MM-YY_HH-MM.xlsx
   const now = new Date();
   const pad = n => String(n).padStart(2, '0');
   const dd = pad(now.getDate());
@@ -1050,6 +1073,7 @@ function performAutoExport(){
     return;
   }
   try {
+    // Use same filename format as manual export: data_DD-MM-YY_HH-MM.xlsx
     const now = new Date();
     const pad = n => String(n).padStart(2, '0');
     const dd = pad(now.getDate());
@@ -1090,7 +1114,7 @@ function startAutoExportScheduler(){
 function stopAutoExportScheduler(){ if(autoExportTimeout){ clearTimeout(autoExportTimeout); autoExportTimeout=null; } if(autoExportInterval){ clearInterval(autoExportInterval); autoExportInterval=null; } notify('Auto Export Stopped', new Date().toLocaleString(), 'Admin logged out or scheduler stopped'); }
 
 /* -------------------------
-   Gauges, charts and storedRows
+   Gauges, charts and storedRows (original implementations)
    ------------------------- */
 function createGauge(canvasId, min, max, colorZones) {
   const canvas=document.getElementById(canvasId); const ctx=canvas.getContext('2d');
@@ -1206,3 +1230,4 @@ window._debug = {
 </script>
 </body>
 </html>
+
