@@ -401,7 +401,7 @@ canvas { display:block; }
   </section>
 
   <section class="card" id="phoneSection" style="text-align:center;">
-    <h3>📱 Alert Phone Number</h3>
+    <h3>�� Alert Phone Number</h3>
     <form id="phoneForm" style="display:flex; flex-direction:row; gap:10px; justify-content:center; align-items:center;">
       <input id="phoneInput" type="tel" placeholder="Enter phone number" style="padding:7px 11px; border-radius:7px; border:1px solid #bbb; font-size:15px; min-width:160px;" pattern="^(\+?\d{9,16})$" required />
       <button id="savePhoneBtn" type="submit" style="padding:8px 26px; background:#0b84d4; color:#fff; border:none; border-radius:7px; font-size:15px; font-weight:700; cursor:pointer;">Update</button>
@@ -806,6 +806,38 @@ client.on('connect', ()=>{
 client.subscribe('ttgo/all_sensors');
 client.subscribe('ttgo/fertilizer_schedule/state', { qos: 1 });
 client.subscribe('ttgo/notifications');
+/* Subscribe to relay state topics so dashboard receives retained relay2/relay3 state */
+client.subscribe('ttgo/relay2_status');
+client.subscribe('ttgo/relay3_status');
+
+/* helper: update pump badge element by id (handles relay2/relay3 status messages) */
+function updateRelayBadge(id, state) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const s = String(state || '').trim().toUpperCase();
+  // Map ON/OFF (from ESP retained topics) into friendly Pump2 label/colors
+  if (s === 'ON') {
+    // treat ON as active fertilizing
+    el.textContent = 'Fertilizing';
+    el.className = 'pump-badge ok';
+  } else if (s === 'OFF') {
+    el.textContent = 'Waiting';
+    el.className = 'pump-badge muted';
+  } else {
+    // if some other payload (e.g., "Fertilizing" string), show it as-is
+    el.textContent = (state && state.length) ? state : '—';
+    el.className = 'pump-badge muted';
+  }
+
+  // If this is relay2Badge, update lastRelay2State + notify on change
+  if (id === 'relay2Badge') {
+    const boolState = (s === 'ON');
+    if (lastRelay2State === null || lastRelay2State !== boolState) {
+      notify('Pump2', new Date().toLocaleString(), boolState ? 'Fertilizing' : 'Waiting', { daily: false });
+      lastRelay2State = boolState;
+    }
+  }
+}
 
 /* --- Pump controls --- */
 const pump1OnBtn = document.getElementById("pump1OnBtn");
@@ -919,6 +951,20 @@ function publishSchedule(schedule){
 
 /* handle incoming messages */
 client.on("message", (topic, msg) => {
+  // Handle relay2/relay3 retained status topic messages to update badges immediately
+  if (topic === 'ttgo/relay2_status' || topic === 'ttgo/relay3_status') {
+    try {
+      const state = msg.toString();
+      if (topic === 'ttgo/relay2_status') {
+        updateRelayBadge('relay2Badge', state);
+      }
+      // relay3Badge is not present in DOM; if added, update it here similarly
+    } catch (e) {
+      console.error('Failed to handle relay status msg', e);
+    }
+    return;
+  }
+
   if(topic === "ttgo/fertilizer_schedule"){
     try {
       const schedule = JSON.parse(msg.toString());
@@ -1017,16 +1063,25 @@ client.on("message", (topic, msg) => {
       }
     }
 
-    // Relay2 handling
+    // Relay2 handling (from sensor JSON payload)
     if (typeof d.relay2 === "undefined" || d.relay2 === null || d.relay2 === "") {
       relay2Badge.className = 'pump-badge muted'; relay2Badge.innerText = '—';
     } else {
-      const relay2Fertilizing = d.relay2 === "Fertilizing";
-      relay2Badge.className = 'pump-badge ' + (relay2Fertilizing ? 'ok' : 'bad'); relay2Badge.innerText = relay2Fertilizing ? 'Fertilizing' : 'Waiting';
-      // Notify on change
-      if (lastRelay2State === null || lastRelay2State !== relay2Fertilizing) {
-        notify('Pump2', new Date().toLocaleString(), relay2Fertilizing ? 'Fertilizing' : 'Waiting', { daily: false });
-        lastRelay2State = relay2Fertilizing;
+      // Support both: ESP may send "ON"/"OFF" on ttgo/relay2_status,
+      // or the sensors payload may include a descriptive value (e.g., "Fertilizing").
+      const val = String(d.relay2).trim();
+      if (val.toUpperCase() === 'ON' || val.toUpperCase() === 'OFF') {
+        // map ON => Fertilizing, OFF => Waiting
+        updateRelayBadge('relay2Badge', val.toUpperCase());
+      } else {
+        // descriptive string (e.g., "Fertilizing" or "Waiting")
+        relay2Badge.textContent = val;
+        relay2Badge.className = val.toLowerCase().includes('fert') ? 'pump-badge ok' : 'pump-badge muted';
+        const relay2Fertilizing = val.toLowerCase().includes('fert');
+        if (lastRelay2State === null || lastRelay2State !== relay2Fertilizing) {
+          notify('Pump2', new Date().toLocaleString(), relay2Fertilizing ? 'Fertilizing' : 'Waiting', { daily: false });
+          lastRelay2State = relay2Fertilizing;
+        }
       }
     }
 
@@ -1230,4 +1285,3 @@ window._debug = {
 </script>
 </body>
 </html>
-
