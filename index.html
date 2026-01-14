@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>🌾 Smart Farming Dashboard</title>
+  <title>�� Smart Farming Dashboard</title>
   <script src="https://cdn.jsdelivr.net/npm/mqtt/dist/mqtt.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
@@ -185,7 +185,7 @@ h1 { font-size:18px; margin:0; }
 .pump-box { min-width:200px; padding:12px; border-radius:10px; background:#fff; text-align:center; box-shadow:0 8px 18px rgba(10,30,20,0.03); }
 .pump-label { font-weight:800; color:#0b84d4; margin-bottom:6px; }
 .pump-badge { font-weight:800; padding:8px 12px; border-radius:8px; display:inline-block; }
-.export-wrap { max-width:var(--maxwidth); margin:6px auto 48px; padding:8px 14px; text-align:center; }
+.export-wrap { max-width:var(--maxwidth); margin:6px auto 0; padding:8px 14px; text-align:center; }
 .export-btn { padding:10px 16px; border-radius:10px; background:var(--accent-2); color:#fff; border:none; font-weight:800; cursor:pointer; }
 .export-btn:active { transform: translateY(1px); }
 .export-btn[disabled] {
@@ -263,14 +263,25 @@ canvas { display:block; }
 #fertilizerSchedule { margin-bottom: 0 !important; }
 #userRoleBanner { margin-top: 10px !important; margin-bottom: 0 !important; }
 
+/* Bottom-row updated to stack vertically so Export appears above the banner */
+.bottom-row {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  max-width: var(--maxwidth);
+  margin: 6px auto 48px;
+  padding: 0 14px;
+}
+
 /* Make sure small screens stack nicely */
 @media (max-width:720px) {
   .controls-row .card, .controls-row #fertilizerSchedule, .controls-row #phoneSection {
     flex: 1 1 100%;
   }
   .bottom-row { gap:10px; justify-content:center; text-align:center; }
-  .bottom-row .export-wrap { order:2; width:100%; }
-  .bottom-row #userRoleBanner { order:1; width:100%; justify-content:center; }
+  .bottom-row .export-wrap { order:1; width:100%; }
+  .bottom-row #userRoleBanner { order:2; width:100%; justify-content:center; }
 }
   </style>
 </head>
@@ -314,7 +325,7 @@ canvas { display:block; }
     </div>
 
     <div class="notif-bell" id="notifBell" title="Notifications" aria-haspopup="true" aria-controls="notifPanel" role="button">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22c1.1 0 2-.9 2-2h-4a2 2 0 002 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4a1.5 1.5 0 10-3 0v.68C7.63 5.36 6 7.92 6 11v5l-1.29 1.29A1 1 0 006 20h12a1 1 0 00.29-1.71L18 16zM8 16v-5c0-2.48 1.51-4.5 4-4.5s4 2.02 4 4.5v5H8z"/></svg>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22a2 2 0 002-2H10a2 2 0 002 2zm6-6v-5A6 6 0 006 11v5l-2 2v1h16v-1l-2-2z"/></svg>
       <div id="notifCount" class="notif-count" aria-hidden="true">0</div>
     </div>
 
@@ -401,7 +412,7 @@ canvas { display:block; }
   </section>
 
   <section class="card" id="phoneSection" style="text-align:center;">
-    <h3>�� Alert Phone Number</h3>
+    <h3>📱 Alert Phone Number</h3>
     <form id="phoneForm" style="display:flex; flex-direction:row; gap:10px; justify-content:center; align-items:center;">
       <input id="phoneInput" type="tel" placeholder="Enter phone number" style="padding:7px 11px; border-radius:7px; border:1px solid #bbb; font-size:15px; min-width:160px;" pattern="^(\+?\d{9,16})$" required />
       <button id="savePhoneBtn" type="submit" style="padding:8px 26px; background:#0b84d4; color:#fff; border:none; border-radius:7px; font-size:15px; font-weight:700; cursor:pointer;">Update</button>
@@ -411,15 +422,15 @@ canvas { display:block; }
   </section>
 </div>
 
-<!-- User banner + export -->
+<!-- Export placed ABOVE the user banner as requested -->
 <div class="bottom-row" role="region" aria-label="User and export row">
+  <div class="export-wrap">
+    <button class="export-btn" id="exportBtn">📦 Export to Excel (.xlsx)</button>
+  </div>
+
   <div id="userRoleBanner" style="display:none;">
     <span id="curRole" style="font-weight:700;"></span>
     <button id="logoutBtn" type="button">Logout</button>
-  </div>
-
-  <div class="export-wrap">
-    <button class="export-btn" id="exportBtn">📦 Export to Excel (.xlsx)</button>
   </div>
 </div>
 
