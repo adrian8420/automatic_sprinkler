@@ -425,6 +425,12 @@ canvas { display:block; }
 <!-- Export placed ABOVE the user banner as requested -->
 <div class="bottom-row" role="region" aria-label="User and export row">
   <div class="export-wrap">
+    <label for="exportSampleRate" style="margin-right:8px; font-weight:700;">Export:</label>
+    <select id="exportSampleRate" title="Choose sampling interval" style="padding:8px 10px; border-radius:8px; margin-right:10px;">
+      <option value="0">Full (all rows)</option>
+      <option value="5" selected>Every 5 minutes</option>
+      <option value="15">Every 15 minutes</option>
+    </select>
     <button class="export-btn" id="exportBtn">📦 Export to Excel (.xlsx)</button>
   </div>
 
@@ -805,7 +811,7 @@ client.on('connect', ()=>{
   } else {
     // If there is a stored schedule, publish it (converted to duration_seconds)
     const stored = readSavedSchedule();
-    if(stored && stored.day && stored.time){
+    if(stored && stored.day){
       const sch = toSchedulePayload(stored);
       client.publish("ttgo/fertilizer_schedule", JSON.stringify(sch));
       try { notify('Schedule Published', new Date().toLocaleString(), `Day:${sch.day} Time:${sch.time} Dur:${formatDuration(sch.duration_min, sch.duration_sec)}`); } catch(e){console.error(e);}
@@ -1097,23 +1103,52 @@ client.on("message", (topic, msg) => {
     }
 
     // Store row for export
-    storedRows.push([ new Date().toLocaleString(), soilAvg, tempVal, waterCm, fertCm, relay1Badge.innerText, relay2Badge.innerText ]);
+    // NOTE: changed to ISO timestamp for robustness when parsing during downsampling/export
+    storedRows.push([ new Date().toISOString(), soilAvg, tempVal, waterCm, fertCm, relay1Badge.innerText, relay2Badge.innerText ]);
     if(storedRows.length>5000) storedRows.shift();
 
   } catch(e){ console.error(e); }
 });
 
 /* -------------------------
-   Manual export handler
+   Downsample helper (keeps first reading per N-minute window)
+   ------------------------- */
+function downsampleToInterval(rows, minutes){
+  if(!Array.isArray(rows) || rows.length === 0) return [];
+  if(!minutes || minutes <= 0) return rows.slice(); // no sampling, return copy
+
+  const msWindow = minutes * 60 * 1000;
+  const out = [];
+  let lastWindow = null;
+  for (const r of rows){
+    // r[0] is ISO timestamp; Date parsing should be robust
+    const t = new Date(r[0]);
+    if (isNaN(t)) continue;
+    const windowId = Math.floor(t.getTime() / msWindow);
+    if (windowId !== lastWindow){
+      out.push(r);
+      lastWindow = windowId;
+    }
+  }
+  return out;
+}
+
+/* -------------------------
+   Manual export handler (respects sampling selector)
    ------------------------- */
 document.getElementById('exportBtn').addEventListener('click', ()=>{
   if(role !== "admin") return;
   if(storedRows.length === 0){ alert('No data to export'); return; }
+
+  const sampleMinutes = Number(document.getElementById('exportSampleRate')?.value || 0);
+  const exportedRows = downsampleToInterval(storedRows, sampleMinutes);
+  if(exportedRows.length === 0){ alert('No data to export after sampling'); return; }
+
   const wb = XLSX.utils.book_new();
-  const ws = XLSX.utils.aoa_to_sheet([ ['Timestamp','Soil %','Temp °C','Water cm','Fertilizer cm','Relay1','Relay2'], ...storedRows ]);
+  const ws = XLSX.utils.aoa_to_sheet([ ['Timestamp','Soil %','Temp °C','Water cm','Fertilizer cm','Relay1','Relay2'], ...exportedRows ]);
   XLSX.utils.book_append_sheet(wb, ws, 'Sensor Data');
 
-  // filename format requested: data_DD-MM-YY_HH-MM.xlsx
+  // filename format requested: data_DD-MM-YY_HH-MM[_Nmin].xlsx
   const now = new Date();
   const pad = n => String(n).padStart(2, '0');
   const dd = pad(now.getDate());
@@ -1121,13 +1156,15 @@ document.getElementById('exportBtn').addEventListener('click', ()=>{
   const yy = String(now.getFullYear()).slice(-2);
   const HH = pad(now.getHours());
   const MM = pad(now.getMinutes());
-  const filename = `data_${dd}-${mm}-${yy}_${HH}-${MM}.xlsx`;
+  const suffix = sampleMinutes > 0 ? `_${sampleMinutes}min` : '';
+  const filename = `data_${dd}-${mm}-${yy}_${HH}-${MM}${suffix}.xlsx`;
 
   XLSX.writeFile(wb, filename);
+  notify('Export', new Date().toLocaleString(), filename);
 });
 
 /* -------------------------
-   Auto-export (admin-only) scheduler
+   Auto-export (admin-only) scheduler - uses same sampling selector (defaults to 5)
    ------------------------- */
 let autoExportTimeout = null;
 let autoExportInterval = null;
@@ -1139,7 +1176,14 @@ function performAutoExport(){
     return;
   }
   try {
-    // Use same filename format as manual export: data_DD-MM-YY_HH-MM.xlsx
+    // use the selector's value for auto-export sampling (fallback to 5)
+    const sampleMinutes = Number(document.getElementById('exportSampleRate')?.value || 5);
+    const exportedRows = downsampleToInterval(storedRows, sampleMinutes);
+    if(exportedRows.length === 0){
+      notify('Auto Export Skipped', new Date().toLocaleString(), `No ${sampleMinutes}-minute sampled data available`, { daily: false, force: true });
+      return;
+    }
+
     const now = new Date();
     const pad = n => String(n).padStart(2, '0');
     const dd = pad(now.getDate());
@@ -1147,10 +1191,11 @@ function performAutoExport(){
     const yy = String(now.getFullYear()).slice(-2);
     const HH = pad(now.getHours());
     const MM = pad(now.getMinutes());
-    const filename = `data_${dd}-${mm}-${yy}_${HH}-${MM}.xlsx`;
+    const suffix = sampleMinutes > 0 ? `_${sampleMinutes}min` : '';
+    const filename = `data_${dd}-${mm}-${yy}_${HH}-${MM}${suffix}.xlsx`;
 
     const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.aoa_to_sheet([ ['Timestamp','Soil %','Temp °C','Water cm','Fertilizer cm','Relay1','Relay2'], ...storedRows ]);
+    const ws = XLSX.utils.aoa_to_sheet([ ['Timestamp','Soil %','Temp °C','Water cm','Fertilizer cm','Relay1','Relay2'], ...exportedRows ]);
     XLSX.utils.book_append_sheet(wb, ws, 'Sensor Data');
     XLSX.writeFile(wb, filename);
     console.log('Auto-export saved as', filename);
