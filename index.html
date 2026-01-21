@@ -1249,7 +1249,7 @@ function createGauge(canvasId, min, max, colorZones) {
   return { setValue(v){ targetValue=Math.max(min,Math.min(max,v)); } };
 }
 const soilGauge = createGauge('soilGauge',0,100,[{min:0,max:40,color:'#ca3838'},{min:40,max:60,color:'#e6e600'},{min:60,max:100,color:'#00b500'}]);
-const tempGauge = createGauge('tempGauge',0,50,[{min:0,max:25,color:'#00b500'},{min:25,max:35,color:'#e6e600'},{min:35,max:50,color:'#ca38338'}]);
+const tempGauge = createGauge('tempGauge',0,50,[{min:0,max:30,color:'#00b500'},{min:30,max:35,color:'#e6e600'},{min:35,max:50,color:'#ca38338'}]);
 
 function createWave(canvasId,color,maxCm){
   const canvas=document.getElementById(canvasId); const ctx=canvas.getContext('2d');
