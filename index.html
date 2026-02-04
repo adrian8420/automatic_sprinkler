@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>�� Smart Farming Dashboard</title>
+  <title>Smart Farming Dashboard</title>
   <script src="https://cdn.jsdelivr.net/npm/mqtt/dist/mqtt.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
@@ -283,6 +283,18 @@ canvas { display:block; }
   .bottom-row .export-wrap { order:1; width:100%; }
   .bottom-row #userRoleBanner { order:2; width:100%; justify-content:center; }
 }
+
+/* Simple modal styles for credentials modal */
+#credModal {
+  position: fixed; left: 0; top: 0; width: 100vw; height: 100vh; z-index: 110;
+  background: rgba(0,0,0,0.3);
+  display: none; align-items:center; justify-content:center;
+}
+#credModal .cred-box {
+  background:#fff; padding:20px; border-radius:12px; min-width:320px; box-shadow:0 8px 30px rgba(0,0,0,0.18);
+}
+#credModal input { width:100%; margin:6px 0; padding:8px; border-radius:6px; border:1px solid #ccc; }
+#credModal .cred-actions { display:flex; gap:8px; justify-content:flex-end; margin-top:8px; }
   </style>
 </head>
 <body>
@@ -294,7 +306,10 @@ canvas { display:block; }
       <h2>Admin Login</h2>
       <input id="usernameInput" type="text" placeholder="Username" autocomplete="username" required />
       <input id="passwordInput" type="password" placeholder="Password" autocomplete="current-password" required />
-      <button type="submit">Login</button>
+      <div style="display:flex; gap:8px; justify-content:center; margin-top:8px;">
+        <button type="submit">Login</button>
+        <button id="changeCredFromLoginBtn" type="button" style="background:#ffc107; border:none; padding:8px 12px; border-radius:7px; cursor:pointer; font-weight:700;">Change Admin</button>
+      </div>
       <div id="loginMsg"></div>
       <div style="margin:10px 0 14px 0; color:#888; font-size:12px;">
       </div>
@@ -302,6 +317,25 @@ canvas { display:block; }
     <hr style="margin:12px 0 15px 0; border:none; border-top:1.5px solid #f0f0f0; width:83%;">
     <div style="font-size: 15px; color:#666;">or</div>
     <button id="userLoginBtn" type="button">User Login (View Only)</button>
+  </div>
+</div>
+
+<!-- Credentials Modal (Change / Reset admin username & password) -->
+<div id="credModal" aria-hidden="true">
+  <div class="cred-box" role="dialog" aria-modal="true" aria-labelledby="credTitle">
+    <h3 id="credTitle" style="margin-top:0;">Change Admin Credentials</h3>
+    <div style="display:flex; flex-direction:column; gap:8px;">
+      <input id="curAdminPassword" type="password" placeholder="Current password" />
+      <input id="newAdminUsername" type="text" placeholder="New username" />
+      <input id="newAdminPassword" type="password" placeholder="New password" />
+      <input id="confirmAdminPassword" type="password" placeholder="Confirm new password" />
+      <div id="credMsg" style="color:#e53935; min-height:20px;"></div>
+      <div class="cred-actions">
+        <button id="resetCredBtn" type="button" style="background:#f44336; color:#fff; border:none; padding:8px 12px; border-radius:8px; cursor:pointer;">Reset to Defaults</button>
+        <button id="cancelCredBtn" type="button" style="background:#eee; border:none; padding:8px 12px; border-radius:8px; cursor:pointer;">Cancel</button>
+        <button id="saveCredBtn" type="button" style="background:#0b84d4; color:#fff; border:none; padding:8px 12px; border-radius:8px; cursor:pointer;">Save</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -442,9 +476,43 @@ canvas { display:block; }
 
 <script>
 /* -------------------------
-   Constants / Keys
+   Credentials stored in localStorage (no DB)
    ------------------------- */
-const ADMIN_CREDENTIALS = { username: "admin", password: "adminpass" };
+const DEFAULT_ADMIN = { username: "admin", password: "adminpass" };
+const ADMIN_KEY = "adminCredentials";
+
+/* load/save/reset admin credentials */
+function loadAdminCreds() {
+  try {
+    const raw = localStorage.getItem(ADMIN_KEY);
+    if (!raw) return { ...DEFAULT_ADMIN };
+    const obj = JSON.parse(raw);
+    return { username: String(obj.username || DEFAULT_ADMIN.username), password: String(obj.password || DEFAULT_ADMIN.password) };
+  } catch (e) {
+    return { ...DEFAULT_ADMIN };
+  }
+}
+function saveAdminCreds(obj) {
+  try {
+    localStorage.setItem(ADMIN_KEY, JSON.stringify({ username: String(obj.username), password: String(obj.password) }));
+  } catch (e) {
+    console.warn("Failed to save admin creds", e);
+  }
+}
+function resetAdminCreds() {
+  try {
+    localStorage.removeItem(ADMIN_KEY);
+    notify('Admin Reset', new Date().toLocaleString(), 'Credentials reset to defaults', { daily: false, force: true });
+  } catch (e) { console.error(e); }
+}
+function checkLoginCredentials(username, password) {
+  const creds = loadAdminCreds();
+  return username === creds.username && password === creds.password;
+}
+
+/* -------------------------
+   Constants / Keys (others)
+   ------------------------- */
 const LOCALSTORAGE_NOTIF = "notifHistory";
 const LOCALSTORAGE_UNREAD = "notifUnreadCount";
 const DAILY_NOTIF_KEY = "notifDailySentDates";
@@ -481,14 +549,22 @@ function setRole(newRole) {
   renderRoleUI();
 }
 
-function showLogin(){ document.getElementById("loginModal").style.display = "flex"; document.getElementById("loginMsg").textContent=""; document.getElementById("usernameInput").value=""; document.getElementById("passwordInput").value=""; }
+/* showLogin now prefills username from stored admin creds */
+function showLogin(){
+  document.getElementById("loginModal").style.display = "flex";
+  document.getElementById("loginMsg").textContent="";
+  const creds = loadAdminCreds();
+  document.getElementById("usernameInput").value = creds.username || "";
+  document.getElementById("passwordInput").value = "";
+}
 function hideLogin(){ document.getElementById("loginModal").style.display = "none"; }
 
+/* login handler uses checkLoginCredentials */
 document.getElementById("loginBox").addEventListener("submit", function(e){
   e.preventDefault();
   const username = document.getElementById("usernameInput").value.trim();
   const password = document.getElementById("passwordInput").value;
-  if(username === ADMIN_CREDENTIALS.username && password === ADMIN_CREDENTIALS.password) {
+  if(checkLoginCredentials(username, password)) {
     setRole("admin"); hideLogin();
   } else {
     document.getElementById("loginMsg").textContent = "Invalid username or password";
@@ -496,6 +572,81 @@ document.getElementById("loginBox").addEventListener("submit", function(e){
 });
 document.getElementById("userLoginBtn").onclick = function(){ setRole("user"); hideLogin(); };
 document.getElementById("logoutBtn").onclick = function(){ setRole(null); showLogin(); };
+
+/* -------------------------
+   Setup Change Credentials modal handlers
+   ------------------------- */
+(function setupCredentialsUI(){
+  const credModal = document.getElementById('credModal');
+  if(!credModal) return;
+
+  const curPwd = document.getElementById('curAdminPassword');
+  const newUser = document.getElementById('newAdminUsername');
+  const newPwd = document.getElementById('newAdminPassword');
+  const confirmPwd = document.getElementById('confirmAdminPassword');
+  const credMsg = document.getElementById('credMsg');
+  const saveBtn = document.getElementById('saveCredBtn');
+  const cancelBtn = document.getElementById('cancelCredBtn');
+  const resetBtn = document.getElementById('resetCredBtn');
+
+  // NOTE: changeCredBtn (banner) was removed from HTML, so we do NOT attach a handler for it.
+  // We still allow opening the credentials modal from the login modal button (changeCredFromLoginBtn).
+
+  // Also allow opening from login modal button (no admin session required).
+  const changeFromLoginBtn = document.getElementById('changeCredFromLoginBtn');
+  if (changeFromLoginBtn) {
+    changeFromLoginBtn.addEventListener('click', () => {
+      const creds = loadAdminCreds();
+      newUser.value = creds.username || '';
+      curPwd.value = '';
+      newPwd.value = '';
+      confirmPwd.value = '';
+      credMsg.textContent = '';
+      credModal.style.display = 'flex';
+      credModal.setAttribute('aria-hidden','false');
+      // leave login modal visible in background so user can go back
+    });
+  }
+
+  cancelBtn.addEventListener('click', ()=>{ credModal.style.display = 'none'; credModal.setAttribute('aria-hidden','true'); credMsg.textContent = ''; });
+
+  resetBtn.addEventListener('click', ()=>{
+    if(!confirm('Reset admin credentials to defaults?')) return;
+    resetAdminCreds();
+    credMsg.style.color = '#1e8e3e';
+    credMsg.textContent = 'Reset to defaults';
+    setTimeout(()=>{ credMsg.textContent = ''; credModal.style.display='none'; credModal.setAttribute('aria-hidden','true'); },1400);
+  });
+
+  saveBtn.addEventListener('click', ()=>{
+    const current = curPwd.value || '';
+    const candidateUser = (newUser.value || '').trim();
+    const candidatePwd = newPwd.value || '';
+    const confirm = confirmPwd.value || '';
+
+    if(!candidateUser){ credMsg.style.color = '#e53935'; credMsg.textContent = 'Enter new username'; return; }
+    if(candidatePwd.length < 4){ credMsg.style.color = '#e53935'; credMsg.textContent = 'Password must be at least 4 chars'; return; }
+    if(candidatePwd !== confirm){ credMsg.style.color = '#e53935'; credMsg.textContent = 'Passwords do not match'; return; }
+
+    const creds = loadAdminCreds();
+    if(current !== creds.password){
+      credMsg.style.color = '#e53935';
+      credMsg.textContent = 'Current password is incorrect';
+      return;
+    }
+
+    // save
+    saveAdminCreds({ username: candidateUser, password: candidatePwd });
+    credMsg.style.color = '#1e8e3e';
+    credMsg.textContent = 'Credentials updated';
+    setTimeout(()=>{ credMsg.textContent = ''; credModal.style.display='none'; credModal.setAttribute('aria-hidden','true'); },1200);
+  });
+
+  // close if clicking outside the box
+  credModal.addEventListener('click', (e)=>{
+    if(e.target === credModal){ credModal.style.display = 'none'; credModal.setAttribute('aria-hidden','true'); }
+  });
+})();
 
 /* -------------------------
    Phone section
@@ -509,15 +660,9 @@ const displayPhone = document.getElementById("displayPhone");
 function getStoredPhone(){ return localStorage.getItem(PHONE_KEY) || ""; }
 function setStoredPhone(num){ localStorage.setItem(PHONE_KEY, num); }
 
-/* 
-  UPDATED: Prefill with +63 if empty and normalize on submit.
-  When admin updates, publish to MQTT topic "ttgo/phone_number" with retain=true
-  so the ESP can receive it even if it reconnects later.
-*/
 function refreshPhoneDisplay(){
   const val = getStoredPhone();
   displayPhone.textContent = val ? val : "—";
-  // If no saved phone, prefill with +63 as requested
   phoneInput.value = val ? val : "+63";
 }
 refreshPhoneDisplay();
@@ -527,51 +672,34 @@ phoneForm.addEventListener("submit", function(e){
   if(role !== "admin") return;
 
   let num = phoneInput.value.trim();
-
-  // Reject if user left only "+63" or empty
   if(num === "" || num === "+63"){
     phoneMsg.textContent = "Please enter a valid phone number after +63";
     return;
   }
-
-  // Normalize:
-  // - If starts with 0 (e.g., 0917...), convert to +63...
-  // - If starts with '+' keep it
-  // - If digits only (no +), assume local and prefix +63
   if(!num.startsWith('+')){
     if(num.startsWith('0')){
       num = '+63' + num.slice(1);
     } else {
-      // digits without leading 0 or + -> assume local
       num = '+63' + num;
     }
   }
-
-  // Final validation: + followed by 9-16 digits (E.164-ish)
   const re = /^\+\d{9,16}$/;
   if(!re.test(num)) {
     phoneMsg.textContent = "Invalid phone number format";
     return;
   }
-
-  // Save locally
   setStoredPhone(num);
   phoneMsg.textContent = "Phone updated!";
   refreshPhoneDisplay();
-
-  // Publish to MQTT so the ESP receives the updated number.
-  // Use retained message so device receives it on reconnect.
   try {
     if (typeof client !== 'undefined' && client && client.connected) {
       client.publish("ttgo/phone_number", num, { qos: 1, retain: true });
     } else {
-      // If MQTT not connected in the dashboard, still save locally.
       console.warn("MQTT client not connected — phone saved locally only");
     }
   } catch (err) {
     console.warn("MQTT publish failed:", err);
   }
-
   setTimeout(()=>{ phoneMsg.textContent=""; }, 1800);
 });
 
@@ -589,7 +717,6 @@ function renderPhoneUI(){
 /* -------------------------
    Notifications (history + unread count + badge + delete)
    ------------------------- */
-
 function getNotifHistory() {
   try { return JSON.parse(localStorage.getItem(LOCALSTORAGE_NOTIF) || "[]"); } catch { return []; }
 }
@@ -616,19 +743,15 @@ function updateNotifBadge(){
   }
 }
 
-/* Render notification panel with delete buttons and "Clear All" */
 function updateNotifDisplay(){
   notifList = getNotifHistory();
   if (notifList.length > 0) {
-    // topbar with Clear All
     let html = `<div class="topbar"><strong>Notifications</strong><button id="clearAllBtn" class="clear-all">Clear All</button></div>`;
-    // render newest first
     for(let i = notifList.length - 1; i >= 0; i--) {
       const n = notifList[i];
       const safeType = escapeHtml(n.type || 'Notification');
       const safeDetail = n.detail ? ` — ${escapeHtml(n.detail)}` : '';
       const safeTime = escapeHtml(n.time || '');
-      // store data-index as original index i
       html += `<div class="notif-item" data-index="${i}">
                  <div class="left">
                    <div><strong>${safeType}</strong>${safeDetail}</div>
@@ -640,8 +763,6 @@ function updateNotifDisplay(){
                </div>`;
     }
     notifPanel.innerHTML = html;
-
-    // attach handlers: delegated click for delete & clear-all
     const clearAllBtn = document.getElementById('clearAllBtn');
     if (clearAllBtn) {
       clearAllBtn.onclick = () => {
@@ -649,8 +770,6 @@ function updateNotifDisplay(){
         clearAllNotifications();
       };
     }
-
-    // delete buttons - use event delegation instead of per-button to be safe
     notifPanel.querySelectorAll('.delete-btn').forEach(btn => {
       btn.addEventListener('click', (ev) => {
         ev.stopPropagation();
@@ -658,16 +777,12 @@ function updateNotifDisplay(){
         deleteNotificationAt(idx);
       });
     });
-
   } else {
     notifPanel.innerHTML = '<div style="color:#aaa;padding:20px 0;text-align:center;">No notifications.</div>';
   }
 }
 
-/* safe simple html escape */
 function escapeHtml(s){ return String(s).replace(/[&<>"']/g, function(m){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"})[m]; }); }
-
-/* add to history (no unread increment here) */
 function addNotifToHistory(type, time, detail) {
   let list = getNotifHistory();
   list.push({ type, time, detail });
@@ -675,53 +790,31 @@ function addNotifToHistory(type, time, detail) {
   saveNotifHistory(list);
   return list;
 }
-
-/*
- Modified notify:
- - opts.daily (default true): enable daily suppression per type
- - opts.force (default false): bypass suppression and always notify
-*/
 function notify(type, time, detail, opts = { daily: true, force: false }) {
   try {
     const doDaily = (opts.daily !== false);
     const force = !!opts.force;
-
     if (doDaily && !force) {
-      if (hasNotifiedToday(type)) {
-        // already sent today for this type -> skip adding again
-        console.debug(`Notification skipped (already sent today): ${type}`);
-        return;
-      }
-      // mark now so that concurrent calls won't duplicate
+      if (hasNotifiedToday(type)) return;
       markNotifiedToday(type);
     }
-
-    // add to history
     addNotifToHistory(type, time, detail);
-    // increment unread
     const newCount = getUnreadCount() + 1;
     setUnreadCount(newCount);
-    // update panel UI
     updateNotifDisplay();
   } catch (err) {
     console.error("notify() failed", err);
   }
 }
-
-/* Delete a specific notification by original index */
 function deleteNotificationAt(index) {
   try {
     let list = getNotifHistory();
     if (index < 0 || index >= list.length) return;
     list.splice(index, 1);
     saveNotifHistory(list);
-    // If panel is shown, keep it shown and update display
     updateNotifDisplay();
-    // unread count stays same (panel open clears it). If you prefer adjusting unread, implement logic here.
   } catch (e) { console.error(e); }
 }
-
-/* Clear all notifications */
 function clearAllNotifications() {
   try {
     localStorage.setItem(LOCALSTORAGE_NOTIF, JSON.stringify([]));
@@ -729,45 +822,29 @@ function clearAllNotifications() {
     updateNotifDisplay();
   } catch(e) { console.error(e); }
 }
-
-/* Clicking the bell toggles panel; when opening clear unread count */
 notifBell.addEventListener("click", (e)=>{
   panelShown = !panelShown;
   notifPanel.classList.toggle("active", panelShown);
-  if(panelShown){
-    // clear unread count when user opens / clicks
-    setUnreadCount(0);
-  }
+  if(panelShown) setUnreadCount(0);
 });
-/* close panel when clicking outside */
 document.addEventListener("click", e=>{
   if(!notifBell.contains(e.target) && !notifPanel.contains(e.target)){
-    notifPanel.classList.remove("active");
-    panelShown = false;
+    notifPanel.classList.remove("active"); panelShown = false;
   }
 });
-
-/* initialize notification UI on DOMContentLoaded */
 window.addEventListener("DOMContentLoaded", ()=>{
-  notifList = getNotifHistory();
-  updateNotifDisplay();
-  updateNotifBadge();
+  notifList = getNotifHistory(); updateNotifDisplay(); updateNotifBadge();
 });
 
 /* -------------------------
    Latest Schedule toast/pill
    ------------------------- */
-const latestScheduleToast = document.getElementById("latestScheduleToast"); // optional element (may be null)
+const latestScheduleToast = document.getElementById("latestScheduleToast"); // optional
 let latestSchedule = null;
-
 function formatDuration(mins, secs) {
-  mins = Number(mins) || 0;
-  secs = Number(secs) || 0;
-  const parts = [];
-  if(mins) parts.push(`${mins}m`);
-  if(secs) parts.push(`${secs}s`);
-  if(parts.length === 0) return '0s';
-  return parts.join(' ');
+  mins = Number(mins) || 0; secs = Number(secs) || 0;
+  const parts = []; if(mins) parts.push(`${mins}m`); if(secs) parts.push(`${secs}s`);
+  if(parts.length === 0) return '0s'; return parts.join(' ');
 }
 function showLatestScheduleToast(schedule, opts={autoHide: true, timeout:6000}) {
   latestSchedule = schedule;
@@ -775,7 +852,7 @@ function showLatestScheduleToast(schedule, opts={autoHide: true, timeout:6000}) 
     ? formatDuration(schedule.duration_min || Math.floor(schedule.duration_seconds/60), schedule.duration_sec || (schedule.duration_seconds % 60))
     : (schedule.duration ? String(schedule.duration) : '-');
   const txt = `Latest Schedule — Day: ${schedule.day || '-'} · Time: ${schedule.time || '-'} · Dur: ${durLabel}`;
-  if (!latestScheduleToast) return; // safe if element absent
+  if (!latestScheduleToast) return;
   latestScheduleToast.innerHTML = `<span>${escapeHtml(txt)}</span> <button class="closeBtn" aria-label="Close latest schedule">✕</button>`;
   latestScheduleToast.style.display = "block";
   const closeBtn = latestScheduleToast.querySelector(".closeBtn");
@@ -799,22 +876,20 @@ client.on('connect', ()=>{
   document.getElementById('connDot').style.background='#4caf50';
   document.getElementById('connText').innerText='Connected';
 
-  // publish pending schedule if present
   if (window.pendingSchedule) {
     client.publish("ttgo/fertilizer_schedule", JSON.stringify(window.pendingSchedule));
-    try { notify('Schedule Published', new Date().toLocaleString(), JSON.stringify(window.pendingSchedule)); } catch(e){console.error(e);}
+    notify('Schedule Published', new Date().toLocaleString(), JSON.stringify(window.pendingSchedule));
     try{
       const ps = window.pendingSchedule;
       showLatestScheduleToast({day:ps.day, time:ps.time, duration_seconds:ps.duration_seconds, duration_min:ps.duration_min, duration_sec:ps.duration_sec});
     }catch(e){}
     window.pendingSchedule = null;
   } else {
-    // If there is a stored schedule, publish it (converted to duration_seconds)
     const stored = readSavedSchedule();
     if(stored && stored.day){
       const sch = toSchedulePayload(stored);
       client.publish("ttgo/fertilizer_schedule", JSON.stringify(sch));
-      try { notify('Schedule Published', new Date().toLocaleString(), `Day:${sch.day} Time:${sch.time} Dur:${formatDuration(sch.duration_min, sch.duration_sec)}`); } catch(e){console.error(e);}
+      notify('Schedule Published', new Date().toLocaleString(), `Day:${sch.day} Time:${sch.time} Dur:${formatDuration(sch.duration_min, sch.duration_sec)}`);
       showLatestScheduleToast(sch);
     }
   }
@@ -823,30 +898,23 @@ client.on('connect', ()=>{
 client.subscribe('ttgo/all_sensors');
 client.subscribe('ttgo/fertilizer_schedule/state', { qos: 1 });
 client.subscribe('ttgo/notifications');
-/* Subscribe to relay state topics so dashboard receives retained relay2/relay3 state */
 client.subscribe('ttgo/relay2_status');
 client.subscribe('ttgo/relay3_status');
 
-/* helper: update pump badge element by id (handles relay2/relay3 status messages) */
 function updateRelayBadge(id, state) {
   const el = document.getElementById(id);
   if (!el) return;
   const s = String(state || '').trim().toUpperCase();
-  // Map ON/OFF (from ESP retained topics) into friendly Pump2 label/colors
   if (s === 'ON') {
-    // treat ON as active fertilizing
     el.textContent = 'Fertilizing';
     el.className = 'pump-badge ok';
   } else if (s === 'OFF') {
     el.textContent = 'Waiting';
     el.className = 'pump-badge muted';
   } else {
-    // if some other payload (e.g., "Fertilizing" string), show it as-is
     el.textContent = (state && state.length) ? state : '—';
     el.className = 'pump-badge muted';
   }
-
-  // If this is relay2Badge, update lastRelay2State + notify on change
   if (id === 'relay2Badge') {
     const boolState = (s === 'ON');
     if (lastRelay2State === null || lastRelay2State !== boolState) {
@@ -860,8 +928,8 @@ function updateRelayBadge(id, state) {
 const pump1OnBtn = document.getElementById("pump1OnBtn");
 const pump1OffBtn = document.getElementById("pump1OffBtn");
 function setPump1ButtonState(state){ pump1OnBtn.classList.remove("active-on"); pump1OffBtn.classList.remove("active-off"); if(state==="ON") pump1OnBtn.classList.add("active-on"); if(state==="OFF") pump1OffBtn.classList.add("active-off"); }
-pump1OnBtn.addEventListener("click", ()=>{ if(role!=="admin") return; if(client.connected){ client.publish("ttgo/relay1_control","ON"); setPump1ButtonState("ON"); console.log("🟢 Pump1 ON sent"); } else alert("MQTT not connected"); });
-pump1OffBtn.addEventListener("click", ()=>{ if(role!=="admin") return; if(client.connected){ client.publish("ttgo/relay1_control","OFF"); setPump1ButtonState("OFF"); console.log("🔴 Pump1 OFF sent"); } else alert("MQTT not connected"); });
+pump1OnBtn.addEventListener("click", ()=>{ if(role!=="admin") return; if(client.connected){ client.publish("ttgo/relay1_control","ON"); setPump1ButtonState("ON"); } else alert("MQTT not connected"); });
+pump1OffBtn.addEventListener("click", ()=>{ if(role!=="admin") return; if(client.connected){ client.publish("ttgo/relay1_control","OFF"); setPump1ButtonState("OFF"); } else alert("MQTT not connected"); });
 
 /* --- Fertilizer schedule UI --- */
 const fertDay = document.getElementById("fertDay");
@@ -881,7 +949,6 @@ if(saved && saved.day) {
   try {
     fertDay.value = saved.day || fertDay.value;
     fertTime.value = saved.time || "";
-    // support both older format and new: if saved.duration_seconds exists use it
     if(typeof saved.duration_seconds !== "undefined"){
       const total = Number(saved.duration_seconds) || 0;
       const mins = Math.floor(total/60);
@@ -889,11 +956,9 @@ if(saved && saved.day) {
       fertDurationMin.value = mins;
       fertDurationSec.value = secs;
     } else {
-      // older values: duration_min/duration_sec or duration (minutes)
       if(typeof saved.duration_min !== "undefined") fertDurationMin.value = saved.duration_min;
       if(typeof saved.duration_sec !== "undefined") fertDurationSec.value = saved.duration_sec;
       if(typeof saved.duration !== "undefined" && saved.duration !== "") {
-        // assume minutes
         fertDurationMin.value = Math.floor(Number(saved.duration));
       }
     }
@@ -919,7 +984,6 @@ function updateCountdown(){
 updateCountdown();
 setInterval(updateCountdown, 60000);
 
-/* Build schedule payload that includes duration_seconds and a human-friendly split */
 function toSchedulePayload(formData){
   const mins = Math.max(0, Number(formData.duration_min || formData.durationMin || formData.durationMinutes || formData.duration_minute || 0));
   const secs = Math.max(0, Number(formData.duration_sec || formData.durationSec || formData.durationSeconds || formData.duration_second || 0));
@@ -933,13 +997,11 @@ function toSchedulePayload(formData){
   };
 }
 
-/* changed Save -> Update behavior: update existing stored schedule object (admin only) */
 saveBtn.addEventListener("click", ()=>{
   if(role !== "admin") return;
-  // read minutes and seconds inputs
   const mins = Math.max(0, Math.floor(Number(fertDurationMin.value) || 0));
   let secs = Math.max(0, Math.floor(Number(fertDurationSec.value) || 0));
-  if(secs > 59) { secs = secs % 60; } // normalize if user entered >59
+  if(secs > 59) { secs = secs % 60; }
   const schedule = {
     day: fertDay.value,
     time: fertTime.value,
@@ -958,7 +1020,7 @@ function publishSchedule(schedule){
   if(role !== "admin") return;
   if(client.connected){
     client.publish("ttgo/fertilizer_schedule", JSON.stringify(schedule));
-    try { notify('Schedule Updated', new Date().toLocaleString(), `Day:${schedule.day} Time:${schedule.time} Dur:${formatDuration(schedule.duration_min, schedule.duration_sec)}`); } catch(e){console.error(e);}
+    notify('Schedule Updated', new Date().toLocaleString(), `Day:${schedule.day} Time:${schedule.time} Dur:${formatDuration(schedule.duration_min, schedule.duration_sec)}`);
     showLatestScheduleToast(schedule);
   } else {
     window.pendingSchedule = schedule;
@@ -968,17 +1030,11 @@ function publishSchedule(schedule){
 
 /* handle incoming messages */
 client.on("message", (topic, msg) => {
-  // Handle relay2/relay3 retained status topic messages to update badges immediately
   if (topic === 'ttgo/relay2_status' || topic === 'ttgo/relay3_status') {
     try {
       const state = msg.toString();
-      if (topic === 'ttgo/relay2_status') {
-        updateRelayBadge('relay2Badge', state);
-      }
-      // relay3Badge is not present in DOM; if added, update it here similarly
-    } catch (e) {
-      console.error('Failed to handle relay status msg', e);
-    }
+      if (topic === 'ttgo/relay2_status') updateRelayBadge('relay2Badge', state);
+    } catch (e) { console.error('Failed to handle relay status msg', e); }
     return;
   }
 
@@ -987,8 +1043,6 @@ client.on("message", (topic, msg) => {
       const schedule = JSON.parse(msg.toString());
       if(schedule.day) fertDay.value = schedule.day;
       if(schedule.time) fertTime.value = schedule.time;
-
-      // Accept either duration_seconds OR duration_min/duration_sec OR legacy duration field
       if(typeof schedule.duration_seconds !== "undefined"){
         const total = Number(schedule.duration_seconds) || 0;
         fertDurationMin.value = Math.floor(total/60);
@@ -997,13 +1051,10 @@ client.on("message", (topic, msg) => {
         if(typeof schedule.duration_min !== "undefined") fertDurationMin.value = schedule.duration_min;
         if(typeof schedule.duration_sec !== "undefined") fertDurationSec.value = schedule.duration_sec;
       } else if(typeof schedule.duration !== "undefined"){
-        // legacy: duration in minutes
         fertDurationMin.value = Math.floor(Number(schedule.duration) || 0);
         fertDurationSec.value = 0;
       }
-
       updateCountdown();
-      // store as new unified format (duration_seconds + split)
       const mins = Number(fertDurationMin.value) || 0;
       const secs = Number(fertDurationSec.value) || 0;
       const unified = { day: fertDay.value, time: fertTime.value, duration_seconds: mins*60 + secs, duration_min: mins, duration_sec: secs };
@@ -1021,38 +1072,31 @@ client.on("message", (topic, msg) => {
     return;
   }
 
-  /* Otherwise assume sensor data and pump states */
   try {
     const d = JSON.parse(msg.toString());
-
-    // Soil
     const soilAvg = Number(d.soil_avg ?? d.soil ?? 0);
     soilGauge.setValue(soilAvg); document.getElementById('soilValue').innerText = soilAvg.toFixed(1)+' %';
     let soilStatus = '—', soilClass = 'muted';
     if(soilAvg <= 40){ soilStatus='Dry'; soilClass='bad'; } else if(soilAvg>40){ soilStatus='Wet'; soilClass='ok'; }
     document.getElementById('soilStatusText').innerHTML = `<span class="badge ${soilClass}">${soilStatus}</span>`;
 
-    // Temp
     const tempVal = Number(d.temp ?? d.temperature ?? 0);
     tempGauge.setValue(tempVal); document.getElementById('tempValue').innerText = tempVal.toFixed(1)+' °C';
     let tempStatus='—', tempClass='muted';
     if(tempVal <= 30){ tempStatus='Warm'; tempClass='ok'; } else if(tempVal>30){ tempStatus='Hot'; tempClass='bad'; }
     document.getElementById('tempStatusText').innerHTML = `<span class="badge ${tempClass}">${tempStatus}</span>`;
 
-    // Water
     const waterCm = Number(d.water_level ?? d.water ?? 0);
     waveWater.setValue(waterCm); let waterStatus='—', waterClass='muted';
     if(waterCm <= 20){ waterStatus='Low'; waterClass='bad'; } else if(waterCm>20){ waterStatus='Sufficient'; waterClass='ok'; }
     document.getElementById('waterStatusText').innerHTML = `<span class="badge ${waterClass}">${waterStatus}</span>`;
 
-    // Fert
     const fertCm = Number(d.fert_level ?? d.fert ?? 0);
     waveFert.setValue(fertCm); let fertStatus='—', fertClass='muted';
     if(fertCm <= 20){ fertStatus='Low'; fertClass='bad'; } else if(fertCm>20){ fertStatus='Sufficient'; fertClass='ok'; }
     document.getElementById('fertStatusText').innerHTML = `<span class="badge ${fertClass}">${fertStatus}</span>`;
 
     const now = new Date().toLocaleTimeString();
-    // Charts
     chartSoil.data.labels.push(now); chartSoil.data.datasets[0].data.push(soilAvg);
     if(chartSoil.data.labels.length>50){ chartSoil.data.labels.shift(); chartSoil.data.datasets[0].data.shift(); } chartSoil.update();
     chartTemp.data.labels.push(now); chartTemp.data.datasets[0].data.push(tempVal);
@@ -1062,36 +1106,28 @@ client.on("message", (topic, msg) => {
     chartFert.data.labels.push(now); chartFert.data.datasets[0].data.push(fertCm);
     if(chartFert.data.labels.length>50){ chartFert.data.labels.shift(); chartFert.data.datasets[0].data.shift(); } chartFert.update();
 
-    // Relays/pumps - detect state changes and notify per ON/OFF every time
     let relay1Badge = document.getElementById('relay1Badge');
     let relay2Badge = document.getElementById('relay2Badge');
 
-    // Relay1 handling
     if (typeof d.relay1 === "undefined" || d.relay1 === null || d.relay1 === "") {
       relay1Badge.className = 'pump-badge muted'; relay1Badge.innerText = '—';
     } else {
       const relay1On = d.relay1 === "ON";
       relay1Badge.className = 'pump-badge ' + (relay1On ? 'ok' : 'bad'); relay1Badge.innerText = relay1On ? 'ON' : 'OFF';
       setPump1ButtonState(relay1On ? "ON" : "OFF");
-      // Notify ON/OFF on change (every change)
       if (lastRelay1State === null || lastRelay1State !== relay1On) {
         notify('Pump1', new Date().toLocaleString(), relay1On ? 'ON' : 'OFF', { daily: false });
         lastRelay1State = relay1On;
       }
     }
 
-    // Relay2 handling (from sensor JSON payload)
     if (typeof d.relay2 === "undefined" || d.relay2 === null || d.relay2 === "") {
       relay2Badge.className = 'pump-badge muted'; relay2Badge.innerText = '—';
     } else {
-      // Support both: ESP may send "ON"/"OFF" on ttgo/relay2_status,
-      // or the sensors payload may include a descriptive value (e.g., "Fertilizing").
       const val = String(d.relay2).trim();
       if (val.toUpperCase() === 'ON' || val.toUpperCase() === 'OFF') {
-        // map ON => Fertilizing, OFF => Waiting
         updateRelayBadge('relay2Badge', val.toUpperCase());
       } else {
-        // descriptive string (e.g., "Fertilizing" or "Waiting")
         relay2Badge.textContent = val;
         relay2Badge.className = val.toLowerCase().includes('fert') ? 'pump-badge ok' : 'pump-badge muted';
         const relay2Fertilizing = val.toLowerCase().includes('fert');
@@ -1102,8 +1138,6 @@ client.on("message", (topic, msg) => {
       }
     }
 
-    // Store row for export
-    // NOTE: changed to ISO timestamp for robustness when parsing during downsampling/export
     storedRows.push([ new Date().toISOString(), soilAvg, tempVal, waterCm, fertCm, relay1Badge.innerText, relay2Badge.innerText ]);
     if(storedRows.length>5000) storedRows.shift();
 
@@ -1111,17 +1145,15 @@ client.on("message", (topic, msg) => {
 });
 
 /* -------------------------
-   Downsample helper (keeps first reading per N-minute window)
+   Downsample helper + export + auto-export
    ------------------------- */
 function downsampleToInterval(rows, minutes){
   if(!Array.isArray(rows) || rows.length === 0) return [];
-  if(!minutes || minutes <= 0) return rows.slice(); // no sampling, return copy
-
+  if(!minutes || minutes <= 0) return rows.slice();
   const msWindow = minutes * 60 * 1000;
   const out = [];
   let lastWindow = null;
   for (const r of rows){
-    // r[0] is ISO timestamp; Date parsing should be robust
     const t = new Date(r[0]);
     if (isNaN(t)) continue;
     const windowId = Math.floor(t.getTime() / msWindow);
@@ -1133,9 +1165,6 @@ function downsampleToInterval(rows, minutes){
   return out;
 }
 
-/* -------------------------
-   Manual export handler (respects sampling selector)
-   ------------------------- */
 document.getElementById('exportBtn').addEventListener('click', ()=>{
   if(role !== "admin") return;
   if(storedRows.length === 0){ alert('No data to export'); return; }
@@ -1148,7 +1177,6 @@ document.getElementById('exportBtn').addEventListener('click', ()=>{
   const ws = XLSX.utils.aoa_to_sheet([ ['Timestamp','Soil %','Temp °C','Water cm','Fertilizer cm','Relay1','Relay2'], ...exportedRows ]);
   XLSX.utils.book_append_sheet(wb, ws, 'Sensor Data');
 
-  // filename format requested: data_DD-MM-YY_HH-MM[_Nmin].xlsx
   const now = new Date();
   const pad = n => String(n).padStart(2, '0');
   const dd = pad(now.getDate());
@@ -1163,27 +1191,21 @@ document.getElementById('exportBtn').addEventListener('click', ()=>{
   notify('Export', new Date().toLocaleString(), filename);
 });
 
-/* -------------------------
-   Auto-export (admin-only) scheduler - uses same sampling selector (defaults to 5)
-   ------------------------- */
 let autoExportTimeout = null;
 let autoExportInterval = null;
 
 function performAutoExport(){
   if(role !== "admin"){
-    console.warn("Auto-export skipped: not admin");
     notify('Auto Export Skipped', new Date().toLocaleString(), 'Not admin at scheduled time', { daily: false, force: true });
     return;
   }
   try {
-    // use the selector's value for auto-export sampling (fallback to 5)
     const sampleMinutes = Number(document.getElementById('exportSampleRate')?.value || 5);
     const exportedRows = downsampleToInterval(storedRows, sampleMinutes);
     if(exportedRows.length === 0){
       notify('Auto Export Skipped', new Date().toLocaleString(), `No ${sampleMinutes}-minute sampled data available`, { daily: false, force: true });
       return;
     }
-
     const now = new Date();
     const pad = n => String(n).padStart(2, '0');
     const dd = pad(now.getDate());
@@ -1198,7 +1220,6 @@ function performAutoExport(){
     const ws = XLSX.utils.aoa_to_sheet([ ['Timestamp','Soil %','Temp °C','Water cm','Fertilizer cm','Relay1','Relay2'], ...exportedRows ]);
     XLSX.utils.book_append_sheet(wb, ws, 'Sensor Data');
     XLSX.writeFile(wb, filename);
-    console.log('Auto-export saved as', filename);
     notify('Auto Export', new Date().toLocaleString(), filename);
   } catch(err){
     console.error('Auto-export failed', err);
@@ -1225,7 +1246,7 @@ function startAutoExportScheduler(){
 function stopAutoExportScheduler(){ if(autoExportTimeout){ clearTimeout(autoExportTimeout); autoExportTimeout=null; } if(autoExportInterval){ clearInterval(autoExportInterval); autoExportInterval=null; } notify('Auto Export Stopped', new Date().toLocaleString(), 'Admin logged out or scheduler stopped'); }
 
 /* -------------------------
-   Gauges, charts and storedRows (original implementations)
+   Gauges, charts and storedRows
    ------------------------- */
 function createGauge(canvasId, min, max, colorZones) {
   const canvas=document.getElementById(canvasId); const ctx=canvas.getContext('2d');
